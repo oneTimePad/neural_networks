@@ -5,8 +5,8 @@ import learning_methods
 import mnist_loader
 import numpy as np
 import sys
-network_topology = [784,100,10]
-network_activations = [activation_functions.LeakyReLU(),activation_functions.Sigmoid()]
+network_topology = [784,30,10]
+network_activations = [activation_functions.Tanh(),activation_functions.Softmax()]
 def reduceL(t):
     for index,v in enumerate(t):
         x,y = v
@@ -18,7 +18,7 @@ epochs = 30
 mini_batch=10
 net = multi_layer_network.FCNetwork(network_topology, \
                         network_activations, \
-                        cost_functions.QuadraticCost()
+                        cost_functions.CrossEntropy()
                         )
 train,valid,test = mnist_loader.load_data_wrapper()
 

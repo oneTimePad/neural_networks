@@ -10,15 +10,36 @@ class ActivationFunction(object):
     def derivative(self,unit_outputs):
         raise NotImplementedError
 
+class Softmax(ActivationFunction):
+    """
+    typically used for output layer
+    """
+    def transform(self,unit_outputs):
+        cpy = np.copy(unit_outputs)
+        num = np.exp(cpy)
+        den = sum(num)
+        return num/den
+    def derivative(self,unit_outputs):
+        return self.transform(unit_outputs)*(1-self.transform(unit_outputs))
+
+
+
+
 class Sigmoid(ActivationFunction):
+    """
+    can be used for both hidden and output layer (better for output)
+    """
     def transform(self,unit_outputs):
 
-        return 1.0/(1.0+np.exp(-unit_outputs))
+        return 1.0/(1.0+np.exp(-np.copy(unit_outputs)))
     def derivative(self,unit_outputs):
 
         return self.transform(unit_outputs)*(1-self.transform(unit_outputs))
 
 class Tanh(ActivationFunction):
+    """
+    only use as hidden
+    """
     def transform(self,unit_outputs):
         return np.tanh(unit_outputs)
     def derivative(self,unit_outputs):
@@ -26,6 +47,9 @@ class Tanh(ActivationFunction):
 
 
 class ReLU(ActivationFunction):
+    """
+    only use for hidden
+    """
     def transform(self, unit_outputs):
         """
         zeros = np.zeros(unit_outputs.shape)
@@ -40,6 +64,9 @@ class ReLU(ActivationFunction):
         return der
 
 class LeakyReLU(ActivationFunction):
+    """
+    only use for hidden
+    """
     def transform(self, unit_outputs):
         zeros = np.zeros(unit_outputs.shape)
         ones =  np.ones(unit_outputs.shape)*.01

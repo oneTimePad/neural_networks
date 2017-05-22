@@ -4,6 +4,12 @@ import random
 
 import pdb
 
+"""
+Fully connected Neural network
+
+based on code from https://github.com/mnielsen/neural-networks-and-deep-learning
+"""
+
 
 class FCNetwork(object):
 
@@ -14,7 +20,7 @@ class FCNetwork(object):
             take activations :[layer2_activation,layer3_activation,...layer_l_activation]
             and intitializes weigts and biases at random
         """
-        
+
         self.network_topology = network_topology
         self.activations = network_activations
         self.weights = [np.random.randn(net,w) for net,w in zip(network_topology[1:],network_topology[:-1])]
@@ -109,7 +115,7 @@ class FCNetwork(object):
         #compute the first gradient for the output layer (hadmard product)
 
         delta_output_layer = self.cost.derivative(activations[-1],y)*self.activations[-1].derivative(linear_outputs[-1])
-
+    
         #list of dC/dw = dC/dz * dz/dw =dC/dz*activation(prev_layer)
         #matrix of dC/dw = activations[prev_layer] = (#prev_unit,1) times transpose of delta_output_layer =(1,#out_unit)
         gradient_weights = [np.zeros(w.shape) for w in self.weights]
