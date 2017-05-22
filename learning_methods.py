@@ -21,3 +21,32 @@ class GradientDescent(LearningMethod):
         #perform gradient descent (current_weight-(learning/N)*grad_weight) ,same for bias
         return ([ w-eta*dw-(eta*self.reg.derivative(w)) for w,dw in zip(weights,grad_weights)], \
         [ b-eta*db for b,db in zip(biases, grad_biases)])
+
+
+class Momentum(LearningMethod):
+    def __init__(self,learning_rate,momentum=0,reg=reg.Regularization()):
+        self.eta = learning_rate
+        self.mu = momentum
+        self.velocity = None
+        self.reg = reg
+
+    def update(self,w,b):
+
+        weights,grad_weights = w
+        biases, grad_biases  = b
+        eta = self.eta
+        #update biases as in SGD
+        b = [ b-eta*db for b,db in zip(biases, grad_biases)]
+
+        # init velocity to all zeros
+        if not self.velocity:
+            self.velocity = [ np.zeros(w.shape) for w in weights]
+        else:
+            #scale velocity by friction
+            self.velocity = [v*self.mu for v in self.velocity]
+
+
+        #perform update on velocity (using regularization if passed in)
+        self.velocity = [ v-eta*dw-(eta*self.reg.derivative(w)) for v,w,dw in zip(self.velocity,weights,grad_weights)]
+        #update weights and return
+        return ([w+dv for w,dv in zip(weights,self.velocity)],b)

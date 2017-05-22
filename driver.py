@@ -1,5 +1,5 @@
 import fcnetwork
-import multi_layer_network
+
 import cost_functions
 import activation_functions
 import learning_methods
@@ -27,5 +27,6 @@ train,valid,test = mnist_loader.load_data_wrapper()
 
 train_list = list(train)
 #reg.L2Reg(lbmda,len(train_list))
-net.learn(train_list,epochs,mini_batch,learning_methods.GradientDescent(eta,reg.L2Reg(lmbda,len(train_list)) \
-),test_data=[reduceL(train_list[:10000]),list(test),list(valid)])
+net.learn(train_list,epochs,mini_batch, \
+learning_methods.Momentum(eta,.7,reg.L2Reg(lmbda,len(train_list))), \
+test_data=[reduceL(train_list[:10000]),list(test),list(valid)])

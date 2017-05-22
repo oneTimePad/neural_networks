@@ -58,7 +58,7 @@ class FCNetwork(object):
 
         training_data = list(training_data)
         n = len(training_data)
-        print("Training Samples received %d:"%n)
+        print("Training Samples received: %d"%n)
         for j in range(epochs):
             random.shuffle(training_data)
             mini_batchs = [
