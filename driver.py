@@ -29,4 +29,5 @@ train_list = list(train)
 #reg.L2Reg(lbmda,len(train_list))
 net.learn(train_list,epochs,mini_batch, \
 learning_methods.Momentum(eta,.7,reg.L2Reg(lmbda,len(train_list))), \
+drop_out=True,\
 test_data=[reduceL(train_list[:10000]),list(test),list(valid)])

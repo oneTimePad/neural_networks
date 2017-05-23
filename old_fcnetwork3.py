@@ -1,7 +1,7 @@
 
 import numpy as np
 import random
-import math
+
 import pdb
 
 """
@@ -32,17 +32,16 @@ class FCNetwork(object):
         self.cost = cost_fn
 
 
-    def compute_mini_batch_gradients(self,mini_batch,drop):
+    def compute_mini_batch_gradients(self,mini_batch):
         """
             performs a single weight/bias update for a given mini_batch
         """
-
         gradient_weights = [np.zeros(w.shape) for w in self.weights]
         gradient_biases  = [np.zeros(b.shape) for b in self.biases]
 
         for x,y in mini_batch:
             #get gradients for a mini_batch sample
-            grad_w,grad_b = self.backprop(x,y,drop)
+            grad_w,grad_b = self.backprop(x,y)
             #sum gradients over mini_batch
             gradient_weights = [cw+dw for cw,dw in zip(gradient_weights,grad_w)]
             gradient_biases  = [cb+db for cb,db in zip(gradient_biases,grad_b)]
@@ -50,7 +49,7 @@ class FCNetwork(object):
         gradient_biases  = [cb/len(mini_batch) for cb in gradient_biases]
         return (gradient_weights,gradient_biases)
 
-    def learn(self,training_data,epochs,mini_batch_size,learning_method,drop_out=False,test_data=None):
+    def learn(self,training_data,epochs,mini_batch_size,learning_method,test_data=None):
         """
             perform the chosen learning method using a random mini_batch for epochs
         """
@@ -67,17 +66,8 @@ class FCNetwork(object):
             ]
 
             for mini_batch in mini_batchs:
-
-                #list of list of indices of all units dropped per layer
-                drop = [np.random.randint(0,self.biases[i].shape[0],math.floor(self.biases[i].shape[0]/2)) for i in range(0,len(self.biases)-1)] if drop_out else None
-
-                grad_w,grad_b = self.compute_mini_batch_gradients(mini_batch,drop)
+                grad_w,grad_b = self.compute_mini_batch_gradients(mini_batch)
                 self.weights,self.biases = learning_method.update((self.weights,grad_w),(self.biases,grad_b))
-
-                if drop_out:
-                    #halve all outgoing neurons
-                    for i in range(1,len(self.weights)):
-                        self.weights[i] = 1/2 *self.weights[i]
 
             print("Epoch {0}:".format(j),end="")
             if test_data:
@@ -106,7 +96,7 @@ class FCNetwork(object):
         return activation
 
 
-    def backprop(self,inputs,y,drop):
+    def backprop(self,inputs,y):
 
         """
             peform backpropagation on the fully-connected network
@@ -117,21 +107,12 @@ class FCNetwork(object):
         activations = [inputs]
 
         linear_outputs = []
-        i = 0
-        stop = len(self.weights)-1
+
         #perform feedforward operation
         for w,b,act in zip(self.weights,self.biases,self.activations):
             linear = np.dot(w,activations[-1])+b
             linear_outputs.append(linear)
-            a = act.transform(linear)
-
-            if i != stop and drop:
-                a[drop[i]] = 0
-            activations.append(a)
-            i+=1
-
-
-
+            activations.append(act.transform(linear))
 
         #gradients are the gradient of the cost fct : dC/dz (called delta) where z is the linear output
 
