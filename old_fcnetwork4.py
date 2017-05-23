@@ -134,10 +134,8 @@ class FCNetwork(object):
         #gradients are the gradient of the cost fct : dC/dz (called delta) where z is the linear output
 
         #compute the first gradient for the output layer (hadmard product)
-        dL = self.cost.derivative(activations[-1],y)
-        #used for activation functions that use backprop
-        self.activations[-1].update(linear_outputs[-1],dL)
-        delta_output_layer = dL*self.activations[-1].derivative(linear_outputs[-1])
+
+        delta_output_layer = self.cost.derivative(activations[-1],y)*self.activations[-1].derivative(linear_outputs[-1])
 
         #list of dC/dw = dC/dz * dz/dw =dC/dz*activation(prev_layer)
         #matrix of dC/dw = activations[prev_layer] = (#prev_unit,1) times transpose of delta_output_layer =(1,#out_unit)
@@ -152,15 +150,9 @@ class FCNetwork(object):
         #go back prop through network
         #start at layer 1 --> second layer
         for l in range(2,len(self.network_topology)):
-
             #back propagate : dC/dZ_L-1 = dC/dZ * dZ/daL *daL*dZL-1 = delta_L *w_L (.) der_act(Z_L-1)
             #transpose of the weight matrix * deltas_for_output_layer (hadmard with) cost_der(z_L-1)
-            dL_back = np.dot(self.weights[-l+1].transpose(),delta)
-            delta = dL_back*self.activations[-l].derivative(linear_outputs[-l])
-
-            #for activation functions that require back prop
-            self.activations[-l].update(linear_outputs[-l],dL_back)
-
+            delta = np.dot(self.weights[-l+1].transpose(),delta)*self.activations[-l].derivative(linear_outputs[-l])
 
             gradient_weights[-l] = np.dot(delta,activations[-l-1].transpose())
             gradient_biases[-l] = delta

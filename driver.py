@@ -8,7 +8,8 @@ import mnist_loader
 import numpy as np
 import sys
 network_topology = [784,30,10]
-network_activations = [activation_functions.LeakyReLU(),activation_functions.Softmax()]
+network_activations = [activation_functions.PReLU(learning_methods.Momentum(.01,.7),30),  \
+activation_functions.Softmax()]
 def reduceL(t):
     for index,v in enumerate(t):
         x,y = v
@@ -29,5 +30,5 @@ train_list = list(train)
 #reg.L2Reg(lbmda,len(train_list))
 net.learn(train_list,epochs,mini_batch, \
 learning_methods.Momentum(eta,.7,reg.L2Reg(lmbda,len(train_list))), \
-drop_out=True,\
+drop_out=False,\
 test_data=[reduceL(train_list[:10000]),list(test),list(valid)])
