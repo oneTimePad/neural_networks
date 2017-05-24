@@ -24,7 +24,7 @@ mini_batch=10
 net=fcnetwork.FCNetwork(network_topology, \
                         network_activations, \
                         cost_functions.CrossEntropy(),\
-                        .5
+                        None
                         )
 train,valid,test = mnist_loader.load_data_wrapper()
 

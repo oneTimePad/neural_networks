@@ -79,7 +79,8 @@ class FCNetwork(object):
             for mini_batch in mini_batchs:
                 grad_w,grad_b = self.compute_mini_batch_gradients(mini_batch)
                 self.weights,self.biases = learning_method.update((self.weights,grad_w),(self.biases,grad_b))
-
+                for act in self.activations:
+                    act.update(len(mini_batch))
             print("Epoch {0}:".format(j),end="")
             if test_data:
                 test_data = list(test_data)
@@ -130,7 +131,7 @@ class FCNetwork(object):
         #compute the first gradient for the output layer (hadmard product)
         dL = self.cost.derivative(activations[-1],y)
         #used for activation functions that use backprop
-        self.activations[-1].update(linear_outputs[-1],dL)
+        self.activations[-1].grad_calc(linear_outputs[-1],dL)
         delta_output_layer = dL*self.activations[-1].derivative(linear_outputs[-1])
 
         #list of dC/dw = dC/dz * dz/dw =dC/dz*activation(prev_layer)
@@ -153,7 +154,7 @@ class FCNetwork(object):
             delta = dL_back*self.activations[-l].derivative(linear_outputs[-l])
 
             #for activation functions that require back prop
-            self.activations[-l].update(linear_outputs[-l],dL_back)
+            self.activations[-l].grad_calc(linear_outputs[-l],dL_back)
 
 
             gradient_weights[-l] = np.dot(delta,activations[-l-1].transpose())
