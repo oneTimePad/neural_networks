@@ -7,9 +7,11 @@ import regularization_functions as reg
 import mnist_loader
 import numpy as np
 import sys
+import batch_norm as bn
 network_topology = [784,30,10]
 #activation_functions.PReLU(learning_methods.Momentum(.01,.7),20),
-network_activations = [activation_functions.PReLU(learning_methods.Momentum(.01,.7),30), \
+#activation_functions.PReLU(learning_methods.Momentum(.01,.7),30)
+network_activations = [activation_functions.Tanh(), \
 activation_functions.Softmax()]
 def reduceL(t):
     for index,v in enumerate(t):
@@ -17,14 +19,15 @@ def reduceL(t):
         t[index] = x,np.argmax(y)
     return t
 
-eta =.0001
+eta =3
 lmbda = 0
 epochs = 64
 mini_batch=10
 net=fcnetwork.FCNetwork(network_topology, \
                         network_activations, \
                         cost_functions.CrossEntropy(),\
-                        None
+                        None, \
+                        [bn.BNLayer(learning_methods.Momentum(.01,.7),.06,(30,mini_batch))]\
                         )
 train,valid,test = mnist_loader.load_data_wrapper()
 
