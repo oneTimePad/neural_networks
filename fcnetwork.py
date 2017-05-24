@@ -18,21 +18,26 @@ import regularization_functions as reg
 class FCNetwork(object):
 
 
-    def __init__(self,network_topology,network_activations,cost_fn):
+    def __init__(self,network_topology,network_activations,cost_fn,drop_out=None):
         """
             takes network : [layer1_size,layer2_size,....layer_l_size]
             take activations :[layer2_activation,layer3_activation,...layer_l_activation]
             and intitializes weigts and biases at random
+            drop_out:= (p,[drop_layer_1,drop_layer_2,...])
+            p:= probability to drop at that layer
         """
+        if len(network_topology)-1 != len(network_activations):
+            raise Exception("number of activation functions must match network")
 
         self.network_topology = network_topology
         self.activations = network_activations
         self.weights = [np.random.randn(net,w)/np.sqrt(w) for net,w in zip(network_topology[1:],network_topology[:-1])]
         self.biases  = [np.random.randn(units,1) for units in network_topology[1:]]
         self.cost = cost_fn
+        self.drop_out = drop_out
 
 
-    def compute_mini_batch_gradients(self,mini_batch,drop):
+    def compute_mini_batch_gradients(self,mini_batch):
         """
             performs a single weight/bias update for a given mini_batch
         """
@@ -40,9 +45,16 @@ class FCNetwork(object):
         gradient_weights = [np.zeros(w.shape) for w in self.weights]
         gradient_biases  = [np.zeros(b.shape) for b in self.biases]
 
+        drop = self.drop_out
         for x,y in mini_batch:
+            #drop out each unit in all hidden layer
+            drop_masks = [ (np.random.randn(*self.biases[i].shape) <drop)/drop for i in range(0,len(self.biases)-1)] if drop else None
+
+            #add dropout to the input layer
+            drop_masks = [(np.random.randn(self.network_topology[0],1) <drop)/drop] +drop_masks if drop else None
+
             #get gradients for a mini_batch sample
-            grad_w,grad_b = self.backprop(x,y,drop)
+            grad_w,grad_b = self.backprop(x,y,drop_masks)
             #sum gradients over mini_batch
             gradient_weights = [cw+dw for cw,dw in zip(gradient_weights,grad_w)]
             gradient_biases  = [cb+db for cb,db in zip(gradient_biases,grad_b)]
@@ -50,7 +62,7 @@ class FCNetwork(object):
         gradient_biases  = [cb/len(mini_batch) for cb in gradient_biases]
         return (gradient_weights,gradient_biases)
 
-    def learn(self,training_data,epochs,mini_batch_size,learning_method,drop_out=False,test_data=None):
+    def learn(self,training_data,epochs,mini_batch_size,learning_method,test_data=None):
         """
             perform the chosen learning method using a random mini_batch for epochs
         """
@@ -65,17 +77,8 @@ class FCNetwork(object):
             ]
 
             for mini_batch in mini_batchs:
-
-                #list of list of indices of all units dropped per layer
-                drop = [np.random.randint(0,self.biases[i].shape[0],math.floor(self.biases[i].shape[0]/2)) for i in range(0,len(self.biases)-1)] if drop_out else None
-
-                grad_w,grad_b = self.compute_mini_batch_gradients(mini_batch,drop)
+                grad_w,grad_b = self.compute_mini_batch_gradients(mini_batch)
                 self.weights,self.biases = learning_method.update((self.weights,grad_w),(self.biases,grad_b))
-
-                if drop_out:
-                    #halve all outgoing neurons
-                    for i in range(1,len(self.weights)):
-                        self.weights[i] = 1/2 *self.weights[i]
 
             print("Epoch {0}:".format(j),end="")
             if test_data:
@@ -104,7 +107,7 @@ class FCNetwork(object):
         return activation
 
 
-    def backprop(self,inputs,y,drop):
+    def backprop(self,inputs,y,drop_masks):
 
         """
             peform backpropagation on the fully-connected network
@@ -112,27 +115,18 @@ class FCNetwork(object):
             y:= its correct outputs
         """
 
-        activations = [inputs]
+        activations = [inputs*(drop_masks.pop(0) if drop_masks else 1)]
 
         linear_outputs = []
-        i = 0
-        stop = len(self.weights)-1
+
         #perform feedforward operation
         for w,b,act in zip(self.weights,self.biases,self.activations):
             linear = np.dot(w,activations[-1])+b
             linear_outputs.append(linear)
-            a = act.transform(linear)
-
-            if i != stop and drop:
-                a[drop[i]] = 0
-            activations.append(a)
-            i+=1
-
-
+            activations.append((act.transform(linear)*(drop_masks.pop(0) if drop_masks and len(drop_masks)!=0 else 1)))
 
 
         #gradients are the gradient of the cost fct : dC/dz (called delta) where z is the linear output
-
         #compute the first gradient for the output layer (hadmard product)
         dL = self.cost.derivative(activations[-1],y)
         #used for activation functions that use backprop

@@ -8,7 +8,8 @@ import mnist_loader
 import numpy as np
 import sys
 network_topology = [784,30,10]
-network_activations = [activation_functions.PReLU(learning_methods.Momentum(.01,.7),30),  \
+#activation_functions.PReLU(learning_methods.Momentum(.01,.7),20),
+network_activations = [activation_functions.PReLU(learning_methods.Momentum(.01,.7),30), \
 activation_functions.Softmax()]
 def reduceL(t):
     for index,v in enumerate(t):
@@ -16,13 +17,14 @@ def reduceL(t):
         t[index] = x,np.argmax(y)
     return t
 
-eta =.01
-lmbda = 5
+eta =.0001
+lmbda = 0
 epochs = 64
 mini_batch=10
 net=fcnetwork.FCNetwork(network_topology, \
                         network_activations, \
-                        cost_functions.CrossEntropy()
+                        cost_functions.CrossEntropy(),\
+                        .5
                         )
 train,valid,test = mnist_loader.load_data_wrapper()
 
@@ -30,5 +32,4 @@ train_list = list(train)
 #reg.L2Reg(lbmda,len(train_list))
 net.learn(train_list,epochs,mini_batch, \
 learning_methods.Momentum(eta,.7,reg.L2Reg(lmbda,len(train_list))), \
-drop_out=False,\
 test_data=[reduceL(train_list[:10000]),list(test),list(valid)])

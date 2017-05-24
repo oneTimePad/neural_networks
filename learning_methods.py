@@ -11,6 +11,11 @@ class LearningMethod(object):
 
 
 class GradientDescent(LearningMethod):
+    """
+    implements the gradient descent update
+    w -> w-eta*gradC_w
+    b -> b-eta*gradC_b
+    """
     def __init__(self,learning_rate,reg=reg.Regularization()):
         self.eta = learning_rate
         self.reg = reg
@@ -24,6 +29,12 @@ class GradientDescent(LearningMethod):
 
 
 class Momentum(LearningMethod):
+    """
+    implements the Momentum update
+    v->mu*v-gradC_w*eta
+    w->w+v
+    b->b-eta*gradC_b
+    """
     def __init__(self,learning_rate,momentum=0,reg=reg.Regularization()):
         self.eta = learning_rate
         self.mu = momentum

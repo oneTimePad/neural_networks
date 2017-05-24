@@ -37,7 +37,7 @@ class Sigmoid(ActivationFunction):
     can be used for both hidden and output layer (better for output)
     """
     def transform(self,unit_outputs):
-
+        unit_outputs[unit_outputs == 0] =.00001
         return 1.0/(1.0+np.exp(-np.copy(unit_outputs)))
     def derivative(self,unit_outputs):
         return self.transform(unit_outputs)*(1-self.transform(unit_outputs))
@@ -101,6 +101,10 @@ class PReLU(ActivationFunction):
     Performance on ImageNet Classification: https://arxiv.org/pdf/1502.01852.pdf  "
     """
     def __init__(self,learning_method,layer_size):
+        """
+        learning_method:= used for learning the alphas in the neg region
+        layer_size:= used to create the alpha array
+        """
         self.alpha = None
         self.size = layer_size
         self.learning_method = learning_method
@@ -121,6 +125,7 @@ class PReLU(ActivationFunction):
         return der
     def update(self,unit_outputs,half_deltas):
         #computes dact/dalpha (this might not make a difference, since alpha for >0 are ignored)
+        #grad killed for unit_outputs > 0
         cpy = np.copy(unit_outputs)
         zeros = unit_outputs >0
         cpy[zeros] = 0
