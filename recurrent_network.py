@@ -4,16 +4,35 @@ based on https://gist.github.com/karpathy/d4dee566867f8291f086
 
 """
 
+def compute_language(lang_file):
+    """
+        create dictionaries from language file
+        from repo reference above
+    """
+    data = open(lang_file,'r').read()
+    #collect unique characters
+    chars = list(set(data))
+    data_size,vocab_size = len(data),len(chars)
+    print('data of size %d has %d unique characters' %(data_size,vocab_size))
+    return ({ch:i for i,ch in enumerate(chars)},{i:ch for i,ch in enumerate(chars)})
+
 
 
 class RNNetwork(object):
     """
     implements multi-layer vanilla RNN
     """
-    def __init__(self,hl_size,num_hl,max_time_step,input_size,language):
+    def __init__(self,hl_size,num_hl,max_time_step,language):
+        """
+        hl_size:= size of the hidden layer state vector
+        num_hl:= number of hidden layers (vertically)
+        max_time_step:= maximum input size for RNN
+        language:= dictionaries for the network language
+        """
         #weight matrix for the input layer
-        first_W = np.random.randn(hl_size,input_size+hl_size)
+        first_W = np.random.randn(hl_size,max_time_step+hl_size)
         self.hl_size = hl_size
+        self.num_hl = num_hl
         #consists of all weight matrices for all num_hl hiddens layers
         self.weights_hidden=[first_W]+[np.random.randn(hl_size,2*hl_size) for i in range(0,num_hl-1)]
         #bias for all hidden layers
@@ -21,19 +40,32 @@ class RNNetwork(object):
         #only one output layer
         self.weights_output = self.random.randn(input_size,hl_size)
         self.biases_output  = self.random.randn(input_size,1)
-
         #saved states
         #[{layer1,layer2....},{layer_1,layer2,...},...]
         self.hidden_states =[ [np.random.randn(hl_size,1) for i in range(0,num_hl)] ]+[{} for j in range(1,input_size)]
+        #saved outputs
         self.outputs =  {}
+        #saved outputs before softmax applied
         self.z = {}
+        #the dictionaries for the language
         self.language = language
+
+
+    def reset_memory(self):
+        #[{layer1,layer2....},{layer_1,layer2,...},...]
+        self.hidden_states =[ [np.random.randn(hl_size,1) for i in range(0,num_hl)] ]+[{} for j in range(1,input_size)]
+        #saved outputs
+        self.outputs =  {}
+        #saved outputs before softmax applied
+        self.z = {}
+
 
     def forward_pass(self,inputs):
         """
         forward pass through the network
         inputs:= list of numeric representations of elements of the language
         returns list of numeric representations of elements of the language predicted at each output
+        returns the output and also updates internal states of network
         """
 
         #go through each time step
@@ -60,12 +92,14 @@ class RNNetwork(object):
     def backward_pass(self,inputs,targets):
         """
         performs backprop in time for multi-layer RNN
+        performs backprop downward and then left
         """
         #go backwards in time
         #gradient for the output weights
-            self.weights_hidden=[first_W]+[np.random.randn(hl_size,2*hl_size) for i in range(0,num_hl-1)]
         dWy = np.zeros_like(self.weights_output)
         dby = np.zeros_like(self.biases_output)
+        #this accounts for both Whh and Whx at each layer
+        #each layer has a [Whh Whx] tensor
         dWh = [ np.zeros_like(w) for w in self.weights_hidden]
         dbh = [ np.zeros_like(b) for b in self.biases_hidden ]
         #used for backward pass (left) columns are vertical backward passes
@@ -75,7 +109,7 @@ class RNNetwork(object):
             #target vector for input i
             y = np.zeros_like(self.outputs[i])
             y[targets[i]]=1
-            #dE_ij/dy_ij := half_delta
+            #dE_ij/dy_ij := half_delta (the error derivative)
             dEy = self.CrossEntropy().derivative(self.outputs[i],y)*self.derivative(self.z[i])
             #dE_ij/dh_ij:= outer product with last layer hidden states
             dWy+=np.outer(dEy,self.hidden_states[i][-1])
@@ -111,3 +145,37 @@ class RNNetwork(object):
                 dWh[-j]+=np.concatenate((np.dot(dh,self.hidden_states[i-1][-j].transpose()),\
                         np.dot(delta,self.hsi[-j-1]).transpose()),axis=1)
                 dhback[-j] =np.dot(self.weights_hidden[-j][:,self.hl_size:])
+        #clip to stop exploding gradient
+        for params in [dWy, dWh, dby, dbh]:
+            np.clip(params,-5,5,out=dparam)
+
+        return dWy,dWh,dby,dbh
+
+    def compute_mini_batch_gradients(self,mini_batch):
+        """
+        compute mini-batch gradients like in feedforward NN
+        """
+        dWy,dWh,dby,dbh = np.zeros_like(self.weights_output),[np.zeros_like(w) for w in self.weights_output], \
+                            np.zeros_like(self.biases_output), [np.zeros_like(b) for b in self.biases]
+        for x,y in mini_batch:
+            outputs = self.forward_pass(x)
+            grad_Wy,grad_Wh,grad_by,grad_bh = self.backward_pass(x,y)
+            dWy = [cw + dw for cw,dw in zip(dWy,grad_Wy)]
+            dWh = [cw + dw for cw,dw in zip(dWh,grad_Wh)]
+            dby = [cb + db for cb,db in zip(dby,grad_by)]
+            dbh = [cb + db for cb,db in zip(dbh,grad_bh)]
+        dWy = [cw/len(mini_batch) for cw in dWy]
+        dWh = [cw/len(mini_batch) for cw in dWh]
+        dby = [cb/len(mini_batch) for cb in dby]
+        dbh = [cb/len(mini_batch) for cb in dbh]
+        return dWy,dWh,dby,dbh
+    def learn(self,training_data,epochs,mini_batches,learning_method):
+        """
+        perform mini batch learning
+        """
+
+
+        for mini_batch in mini_batches:
+            dWy,dWh,dby,dbh = self.compute_mini_batch_gradients(mini_batch)
+            self.learning_method((self.weights_output,dWy),(self.biases_output,dby))
+            self.learning_method((self.weights_hidden,dWh),(self.biases_hidden,dbh))
