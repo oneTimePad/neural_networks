@@ -18,28 +18,21 @@ import regularization_functions as reg
 class FCNetwork(object):
 
 
-    def __init__(self,network_topology,network_activations,cost_fn,drop_out=None,bn=None):
+    def __init__(self,network_topology,network_activations,cost_fn):
         """
             takes network : [layer1_size,layer2_size,....layer_l_size]
             take activations :[layer2_activation,layer3_activation,...layer_l_activation]
             and intitializes weigts and biases at random
-            drop_out:=  probability to drop at that layer
-            bn:= [layer2(None/BNLayer),layer3(None/BNLayer),...]
-            None/BNLayer(object):= whether to have BatchNorm at the layer (except input/output)
         """
-        if len(network_topology)-1 != len(network_activations):
-            raise Exception("number of activation functions must match network")
 
         self.network_topology = network_topology
         self.activations = network_activations
         self.weights = [np.random.randn(net,w)/np.sqrt(w) for net,w in zip(network_topology[1:],network_topology[:-1])]
         self.biases  = [np.random.randn(units,1) for units in network_topology[1:]]
         self.cost = cost_fn
-        self.drop_out = drop_out
-        self.bn = bn+[None] if bn!=None else [None]*len(self.network_topology)
 
 
-    def compute_mini_batch_gradients(self,mini_batch):
+    def compute_mini_batch_gradients(self,mini_batch,drop):
         """
             performs a single weight/bias update for a given mini_batch
         """
@@ -47,16 +40,9 @@ class FCNetwork(object):
         gradient_weights = [np.zeros(w.shape) for w in self.weights]
         gradient_biases  = [np.zeros(b.shape) for b in self.biases]
 
-        drop = self.drop_out
         for x,y in mini_batch:
-            #drop out each unit in all hidden layer
-            drop_masks = [ (np.random.randn(*self.biases[i].shape) <drop)/drop for i in range(0,len(self.biases)-1)] if drop else None
-
-            #add dropout to the input layer
-            drop_masks = [(np.random.randn(self.network_topology[0],1) <drop)/drop] +drop_masks if drop else None
-
             #get gradients for a mini_batch sample
-            grad_w,grad_b = self.backprop(x,y,drop_masks)
+            grad_w,grad_b = self.backprop(x,y,drop)
             #sum gradients over mini_batch
             gradient_weights = [cw+dw for cw,dw in zip(gradient_weights,grad_w)]
             gradient_biases  = [cb+db for cb,db in zip(gradient_biases,grad_b)]
@@ -64,7 +50,7 @@ class FCNetwork(object):
         gradient_biases  = [cb/len(mini_batch) for cb in gradient_biases]
         return (gradient_weights,gradient_biases)
 
-    def learn(self,training_data,epochs,mini_batch_size,learning_method,test_data=None):
+    def learn(self,training_data,epochs,mini_batch_size,learning_method,drop_out=False,test_data=None):
         """
             perform the chosen learning method using a random mini_batch for epochs
         """
@@ -79,11 +65,18 @@ class FCNetwork(object):
             ]
 
             for mini_batch in mini_batchs:
-                grad_w,grad_b = self.compute_mini_batch_gradients(mini_batch)
+
+                #list of list of indices of all units dropped per layer
+                drop = [np.random.randint(0,self.biases[i].shape[0],math.floor(self.biases[i].shape[0]/2)) for i in range(0,len(self.biases)-1)] if drop_out else None
+
+                grad_w,grad_b = self.compute_mini_batch_gradients(mini_batch,drop)
                 self.weights,self.biases = learning_method.update((self.weights,grad_w),(self.biases,grad_b))
-                #update params of all parametric activation functions
-                for act in self.activations:
-                    act.update(len(mini_batch))
+
+                if drop_out:
+                    #halve all outgoing neurons
+                    for i in range(1,len(self.weights)):
+                        self.weights[i] = 1/2 *self.weights[i]
+
             print("Epoch {0}:".format(j),end="")
             if test_data:
                 test_data = list(test_data)
@@ -106,12 +99,12 @@ class FCNetwork(object):
         evaluate network in the forward direction
         return the output layer activations
         """
-        for w,b,act,bn in zip(self.weights,self.biases,self.activations,self.bn):
-            activation = act.transform(np.dot(w,activation)+b if bn is None else bn.transform(np.dot(w,activation),"test"))
+        for w,b,act in zip(self.weights,self.biases,self.activations):
+            activation = act.transform(np.dot(w,activation)+b)
         return activation
 
 
-    def backprop(self,inputs,y,drop_masks):
+    def backprop(self,inputs,y,drop):
 
         """
             peform backpropagation on the fully-connected network
@@ -119,27 +112,33 @@ class FCNetwork(object):
             y:= its correct outputs
         """
 
-        activations = [inputs*(drop_masks.pop(0) if drop_masks else 1)]
+        activations = [inputs]
 
         linear_outputs = []
-
+        i = 0
+        stop = len(self.weights)-1
         #perform feedforward operation
-        for w,b,act,bn in zip(self.weights,self.biases,self.activations,self.bn):
-            #batch-norm doesn't used bias (if bn linear outputs get swapped with BN transform output)
-            linear = np.dot(w,activations[-1])+b if bn is None else bn.transform(np.dot(w,activations[-1]),"train")
+        for w,b,act in zip(self.weights,self.biases,self.activations):
+            linear = np.dot(w,activations[-1])+b
             linear_outputs.append(linear)
-            activations.append((act.transform(linear)*(drop_masks.pop(0) if drop_masks and len(drop_masks)!=0 else 1)))
+            a = act.transform(linear)
+
+            if i != stop and drop:
+                a[drop[i]] = 0
+            activations.append(a)
+            i+=1
+
+
 
 
         #gradients are the gradient of the cost fct : dC/dz (called delta) where z is the linear output
+
         #compute the first gradient for the output layer (hadmard product)
-        dL = self.cost.derivative(activations[-1],y)
-        #used for activation functions that use backprop
-        self.activations[-1].grad_calc(linear_outputs[-1],dL)
-        delta_output_layer = dL*self.activations[-1].derivative(linear_outputs[-1])
+
+        delta_output_layer = self.cost.derivative(activations[-1],y)*self.activations[-1].derivative(linear_outputs[-1])
 
         #list of dC/dw = dC/dz * dz/dw =dC/dz*activation(prev_layer)
-        #matrix of dC/dw = delta outerproduct with activations of prev layer
+        #matrix of dC/dw = activations[prev_layer] = (#prev_unit,1) times transpose of delta_output_layer =(1,#out_unit)
         gradient_weights = [np.zeros(w.shape) for w in self.weights]
         gradient_weights[-1] = np.dot(delta_output_layer, activations[-2].transpose())
         #list of dC/db=dC/dz
@@ -151,17 +150,9 @@ class FCNetwork(object):
         #go back prop through network
         #start at layer 1 --> second layer
         for l in range(2,len(self.network_topology)):
-
             #back propagate : dC/dZ_L-1 = dC/dZ * dZ/daL *daL*dZL-1 = delta_L *w_L (.) der_act(Z_L-1)
             #transpose of the weight matrix * deltas_for_output_layer (hadmard with) cost_der(z_L-1)
-            dL_back = np.dot(self.weights[-l+1].transpose(),delta)
-            #for activation functions that require back prop (takes in dL/da)
-            self.activations[-l].grad_calc(linear_outputs[-l],dL_back)
-            #compuers dL/dz or dL/dy if using bn
-            delta = dL_back*self.activations[-l].derivative(linear_outputs[-l])
-            #if bn layer, we need to backprop through bn transformation
-            #uses dL/dy to compute dL/dz,dL/dg, and dL/dbeta
-            delta = delta if self.bn[-l] is None else self.bn[-l].grad_calc(delta)
+            delta = np.dot(self.weights[-l+1].transpose(),delta)*self.activations[-l].derivative(linear_outputs[-l])
 
             gradient_weights[-l] = np.dot(delta,activations[-l-1].transpose())
             gradient_biases[-l] = delta

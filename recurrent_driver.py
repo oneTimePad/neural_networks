@@ -10,7 +10,7 @@ lang = recurrent_network.compute_language(file_name)
 
 
 hl_size = 100
-num_hl  = 1
+num_hl  = 2
 max_time_step = 25
 
 net = recurrent_network.RNNetwork(\
@@ -21,8 +21,8 @@ net = recurrent_network.RNNetwork(\
 )
 
 epochs = 100
-eta=.01
-learning_method = learning_methods.GradientDescent(eta)
+eta=.1
+learning_method = learning_methods.AdaGrad(eta)
 
 net.no_batch_learn( \
                 file_name, \

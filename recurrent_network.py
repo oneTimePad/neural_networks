@@ -7,7 +7,7 @@ based on https://gist.github.com/karpathy/d4dee566867f8291f086
 import numpy as np
 import activation_functions
 import cost_functions
-
+import copy
 def compute_language(lang_file):
     """
         create dictionaries from language file
@@ -240,14 +240,19 @@ class RNNetwork(object):
         just simply goes through the input sequence by sequence
         from reference above
         """
+        y_learn = learning_method
+        h_learn = copy.deepcopy(learning_method)
+
         f = open(training_data,'r')
         data = f.read()
         f.close()
+        """
         mWy = np.zeros_like(self.weights_output)
         mby = np.zeros_like(self.biases_output)
 
         mWh = [ np.zeros_like(w) for w in self.weights_hidden]
         mbh = [ np.zeros_like(b) for b in self.biases_hidden ]
+        """
         n=0
         smooth_loss =-np.log(1.0/self.vocab_size)*self.max_time_step
         for j in range(epochs):
@@ -269,14 +274,15 @@ class RNNetwork(object):
 
                 self.initial_state = self.hidden_states[self.max_time_step-1]
                 dWy,dWh,dby,dbh = self.backward_pass(inputs,targets)
-                """
-                self.weights_output,self.biases_output=learning_method.update(([self.weights_output],[dWy]),([self.biases_output],[dby]))
+
+
+                self.weights_output,self.biases_output=y_learn.update(([self.weights_output],[dWy]),([self.biases_output],[dby]))
                 self.weights_output = self.weights_output[0]
                 self.biases_output  = self.biases_output[0]
 
-                self.weights_hidden,self.biases_hidden=learning_method.update((self.weights_hidden,dWh),(self.biases_hidden,dbh))
-                """
+                self.weights_hidden,self.biases_hidden=h_learn.update((self.weights_hidden,dWh),(self.biases_hidden,dbh))
 
+                """
                 learning_rate=.1
                 for param,dparam,mem in zip(self.weights_hidden,dWh,mWh):
                     mem+=dparam*dparam
@@ -290,7 +296,7 @@ class RNNetwork(object):
                 for param,dparam,mem in zip(self.biases_output,dby,mby):
                     mem+=dparam*dparam
                     param+= -learning_rate*dparam/np.sqrt(mem+1e-8)
-
+                """
                 loss = sum([-np.log(self.outputs[t][targets[t]]) for t in range(0,self.max_time_step)])[0]
                 smooth_loss = smooth_loss * 0.999 + loss * 0.001
 

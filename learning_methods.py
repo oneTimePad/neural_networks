@@ -10,6 +10,32 @@ class LearningMethod(object):
         raise NotImplementedError
 
 
+class AdaGrad(LearningMethod):
+    """
+    implements adagrad update
+    """
+    def __init__(self,learning_rate,reg=reg.Regularization()):
+        self.eta = learning_rate
+        self.reg = reg
+        self.mem_w = None
+        self.mem_b = None
+    def update(self,w,b):
+        weights,grad_weights = w
+        biases,grad_biases  = b
+
+        if self.mem_w is None:
+            self.mem_w = [ np.zeros_like(w) for w in weights]
+        if self.mem_b is None:
+            self.mem_b =  [ np.zeros_like(b) for b in biases ]
+
+        self.mem_w = [mem+d**2 for mem,d in zip(self.mem_w,grad_weights)]
+        self.mem_b = [mem+d**2 for mem,d in zip(self.mem_b,grad_biases)]
+
+        return [ w-self.eta*d/np.sqrt(mem+1e-8) for w,d,mem in zip(weights,grad_weights,self.mem_w)], \
+        [ b-self.eta*d/np.sqrt(mem+1e-8) for b,d,mem in zip(biases,grad_biases,self.mem_b)],
+
+
+
 class GradientDescent(LearningMethod):
     """
     implements the gradient descent update
