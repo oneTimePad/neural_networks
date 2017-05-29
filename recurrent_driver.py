@@ -3,9 +3,11 @@
 import recurrent_network
 import learning_methods
 
-file_name = '/home/lie/lol.txt'
+
+file_name =
 
 lang = recurrent_network.compute_language(file_name)
+
 
 hl_size = 100
 num_hl  = 1
@@ -19,7 +21,7 @@ net = recurrent_network.RNNetwork(\
 )
 
 epochs = 100
-eta=3
+eta=.01
 learning_method = learning_methods.GradientDescent(eta)
 
 net.no_batch_learn( \

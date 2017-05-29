@@ -20,7 +20,10 @@ def compute_language(lang_file):
     chars = list(set(data))
     data_size,vocab_size = len(data),len(chars)
     print('data of size %d has %d unique characters' %(data_size,vocab_size))
-    return ({ch:i for i,ch in enumerate(chars)},{i:ch for i,ch in enumerate(chars)},vocab_size)
+    c = {ch:i for i,ch in enumerate(chars)}
+    x ={i:ch for i,ch in enumerate(chars)}
+
+    return (c,x,vocab_size)
 
 
 
@@ -36,11 +39,13 @@ class RNNetwork(object):
         language:= dictionaries for the network language
         """
 
+
         #the dictionaries for the language
         self.char_to_ix,self.ix_to_char,self.vocab_size = language
 
         #weight matrix for the input layer
         first_W = np.random.randn(hl_size,self.vocab_size+hl_size)
+        #first_W = np.ones((hl_size,self.vocab_size+hl_size))
         self.hl_size = hl_size
         self.num_hl = num_hl
         self.max_time_step = max_time_step
@@ -50,6 +55,7 @@ class RNNetwork(object):
         self.biases_hidden = [np.zeros((hl_size,1)) for i in range(0,num_hl)]
         #only one output layer
         self.weights_output = np.random.randn(self.vocab_size,hl_size)*.01
+        #self.weights_output = np.ones((self.vocab_size,hl_size))*.01
         self.biases_output  = np.zeros((self.vocab_size,1))
         #saved states
         #[{layer1,layer2....},{layer_1,layer2,...},...]
@@ -61,17 +67,15 @@ class RNNetwork(object):
         #saved outputs before softmax applied
         self.z = {}
 
-
-
     def reset_memory(self):
         #[{layer1,layer2....},{layer_1,layer2,...},...]
-        self.hidden_states =[[np.zeros((self.hl_size,1)) for m in range(0,self.num_hl)] for j in range(0,self.max_time_step)]
+        #self.hidden_states =[[np.zeros((self.hl_size,1)) for m in range(0,self.num_hl)] for j in range(0,self.max_time_step)]
         #the iniital hidden states for all layers
         self.initial_state = [np.zeros((self.hl_size,1)) for m in range(0,self.num_hl)]
         #saved outputs
-        self.outputs =  {}
+        #self.outputs =  {}
         #saved outputs before softmax applied
-        self.z = {}
+        #self.z = {}
 
 
     def forward_pass(self,inputs,initial_state=None):
@@ -104,7 +108,9 @@ class RNNetwork(object):
             #could be made way more efficient,just making it explicit
             self.z[i] = np.dot(self.weights_output,self.hidden_states[i][-1])+self.biases_output
             self.outputs[i] =activation_functions.Softmax().transform(self.z[i])
-        return [self.ix_to_char[np.argmax(o)] for o in self.outputs]
+            #self.outputs[i] = np.exp(self.z[i])/np.sum(np.exp(self.z[i]))
+
+        return [self.ix_to_char[np.argmax(self.outputs[o])] for o in self.outputs.keys()]
 
     def backward_pass(self,inputs,targets):
         """
@@ -121,7 +127,10 @@ class RNNetwork(object):
         dbh = [ np.zeros_like(b) for b in self.biases_hidden ]
         #used for backward pass (left) columns are vertical backward passes
         dhback = [np.zeros_like(w) for w in self.biases_hidden]
+
+
         for i in reversed(range(0,len(inputs))):
+
             #dWy can be calculate very efficiently , just done this way to make it explicit
             #target vector for input i
             y = np.zeros_like(self.outputs[i])
@@ -130,10 +139,13 @@ class RNNetwork(object):
             one_hot = np.zeros((self.vocab_size,1))
             one_hot[inputs[i]] =1
             #dE_ij/dy_ij := half_delta (the error derivative)
-            dEy =cost_functions.CrossEntropy().derivative(self.outputs[i],y)* \
-                            activation_functions.Softmax().derivative(self.z[i])
+            #dEy1 =cost_functions.CrossEntropy().derivative(self.outputs[i],y)* \
+            #                activation_functions.Softmax().derivative(self.z[i])
+            dEy= np.copy(self.outputs[i])
+            dEy[targets[i]]-=1
+
             #dE_ij/dh_ij:= outer product with last layer hidden states
-            dWy+=np.outer(dEy,self.hidden_states[i][-1])
+            dWy+=np.dot(dEy,self.hidden_states[i][-1].transpose())
             dby+=dEy
             #dE_ij/dh_ij = Wy_T (dEy) back into h_ij
             half_delta =np.dot(self.weights_output.transpose(),dEy)
@@ -141,16 +153,17 @@ class RNNetwork(object):
             # dE_ij/dz_ij = dE_ij/d_hji *dh_ij/dz_ij (unit error, same as feedforward NN)
             delta = half_delta*(1.0-self.hidden_states[i][-1]**2)
             #dh = dE_i/dz_ij  + dE_i+1/dz_ij + ... dE_len(input)-1/dz_ij
-            dh  = delta + dhback[-1]*(1.0-self.hidden_states[i][-1]**2)
+            dh  = delta + (dhback[-1]*(1.0-self.hidden_states[i][-1]**2))
             #fetch states for this timestep at each layer
             hsi = self.hidden_states[i]
             #highest layer hidden bias
             dbh[-1]+=dh
             #Wh = [Wh Wx] thus dWh = [delta (outer) hi-1,j delta(outer)h[i][j-1] ]
             input_state = self.hidden_states[i][-2] if len(self.weights_hidden)>1 else one_hot
-            prev_hidden_state = self.hidden_states[i-1][-1]
+            prev_hidden_state = self.hidden_states[i-1][-1] if i!=0 else self.initial_state[-1]
+
             dWh[-1]+=np.concatenate((np.dot(dh,prev_hidden_state.transpose()),\
-                    np.dot(delta,input_state.transpose())),axis=1)
+                    np.dot(dh,input_state.transpose())),axis=1)
             #backpass to the left the cumuative sum  of dE_i's (make them all with respec to the next hidden layer to the left)
             #Whh_T*dh
             dhback[-1] = np.dot(self.weights_hidden[-1][:,:self.hl_size].transpose(),dh)
@@ -165,7 +178,7 @@ class RNNetwork(object):
                 #cumulative dE_i's with respect to the zij layer
                 dh = delta + dhback[-j]*(1.0-hsi[-j]**2)
                 dbh[-j]+=dh
-                prev_hidden_state = self.hidden_states[i-1][-j]
+                prev_hidden_state = self.hidden_states[i-1][-j] if i!=0 else self.initial_state[-j]
                 input_state = hsi[-j-1]  if j!=len(self.weights_hidden) else one_hot
                 dWh[-j]+=np.concatenate((np.dot(dh,prev_hidden_state.transpose()),\
                         np.dot(delta,input_state.transpose())),axis=1)
@@ -230,23 +243,58 @@ class RNNetwork(object):
         f = open(training_data,'r')
         data = f.read()
         f.close()
+        mWy = np.zeros_like(self.weights_output)
+        mby = np.zeros_like(self.biases_output)
+
+        mWh = [ np.zeros_like(w) for w in self.weights_hidden]
+        mbh = [ np.zeros_like(b) for b in self.biases_hidden ]
+        n=0
+        smooth_loss =-np.log(1.0/self.vocab_size)*self.max_time_step
         for j in range(epochs):
             p = 0
-            n = 0
             while p+self.max_time_step+1 < len(data):
+
                 inputs = [self.char_to_ix[ch] for ch in data[p:p+self.max_time_step]]
                 targets = [self.char_to_ix[ch] for ch in data[p+1:p+self.max_time_step+1]]
+
                 if n% 100 == 0:
                     samples = self.sample_sequence(inputs[0],200)
                     txt = ''.join(self.ix_to_char[ix] for ix in samples)
                     print('----\n %s \n----' % (txt,))
 
+
                 outputs = self.forward_pass(inputs)
+                if n%100 ==0:
+                    print("LOSS: %f\n" % (smooth_loss))
+
                 self.initial_state = self.hidden_states[self.max_time_step-1]
                 dWy,dWh,dby,dbh = self.backward_pass(inputs,targets)
-                learning_method.update((self.weights_output,dWy),(self.biases_output,dby))
-                learning_method.update((self.weights_hidden,dWh),(self.biases_hidden,dbh))
+                """
+                self.weights_output,self.biases_output=learning_method.update(([self.weights_output],[dWy]),([self.biases_output],[dby]))
+                self.weights_output = self.weights_output[0]
+                self.biases_output  = self.biases_output[0]
+
+                self.weights_hidden,self.biases_hidden=learning_method.update((self.weights_hidden,dWh),(self.biases_hidden,dbh))
+                """
+
+                learning_rate=.1
+                for param,dparam,mem in zip(self.weights_hidden,dWh,mWh):
+                    mem+=dparam*dparam
+                    param+= -learning_rate*dparam/np.sqrt(mem+1e-8)
+                for param,dparam,mem in zip(self.biases_hidden,dbh,mbh):
+                    mem+=dparam*dparam
+                    param+= -learning_rate*dparam/np.sqrt(mem+1e-8)
+                for param,dparam,mem in zip(self.weights_output,dWy,mWy):
+                    mem+=dparam*dparam
+                    param+= -learning_rate*dparam/np.sqrt(mem+1e-8)
+                for param,dparam,mem in zip(self.biases_output,dby,mby):
+                    mem+=dparam*dparam
+                    param+= -learning_rate*dparam/np.sqrt(mem+1e-8)
+
+                loss = sum([-np.log(self.outputs[t][targets[t]]) for t in range(0,self.max_time_step)])[0]
+                smooth_loss = smooth_loss * 0.999 + loss * 0.001
 
                 p+=self.max_time_step
                 n+=1
             self.reset_memory()
+            print("EPOCH %d" %(j,))
