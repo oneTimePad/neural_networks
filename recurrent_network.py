@@ -8,6 +8,8 @@ import numpy as np
 import activation_functions
 import cost_functions
 import copy
+
+
 def compute_language(lang_file):
     """
         create dictionaries from language file
@@ -59,9 +61,9 @@ class RNNetwork(object):
         self.biases_output  = np.zeros((self.vocab_size,1))
         #saved states
         #[{layer1,layer2....},{layer_1,layer2,...},...]
-        self.hidden_states =[[np.zeros((hl_size,1)) for m in range(0,num_hl)] for j in range(0,max_time_step)]
+        self.states =[[np.zeros((hl_size,1)) for m in range(0,num_hl)] for j in range(0,max_time_step)]
         #the iniital hidden states for all layers
-        self.initial_state = [np.zeros((hl_size,1)) for m in range(0,num_hl)]
+        self.initial_states = [np.zeros((hl_size,1)) for m in range(0,num_hl)]
         #saved outputs
         self.outputs =  {}
         #saved outputs before softmax applied
@@ -69,9 +71,9 @@ class RNNetwork(object):
 
     def reset_memory(self):
         #[{layer1,layer2....},{layer_1,layer2,...},...]
-        #self.hidden_states =[[np.zeros((self.hl_size,1)) for m in range(0,self.num_hl)] for j in range(0,self.max_time_step)]
+        #self.states =[[np.zeros((self.hl_size,1)) for m in range(0,self.num_hl)] for j in range(0,self.max_time_step)]
         #the iniital hidden states for all layers
-        self.initial_state = [np.zeros((self.hl_size,1)) for m in range(0,self.num_hl)]
+        self.initial_states = [np.zeros((self.hl_size,1)) for m in range(0,self.num_hl)]
         #saved outputs
         #self.outputs =  {}
         #saved outputs before softmax applied
@@ -86,7 +88,7 @@ class RNNetwork(object):
         returns the output and also updates internal states of network
         """
 
-        initial_state = initial_state if initial_state!=None else self.initial_state
+        initial_state = initial_state if initial_state!=None else self.initial_states
 
         #go through each time step
         for i in range(0,min(len(inputs),self.max_time_step)):
@@ -94,7 +96,7 @@ class RNNetwork(object):
             #compute the input at the ith time step
             one_hot = np.zeros((self.vocab_size,1))
             one_hot[inputs[i]] =1
-            hidden_states_i = self.hidden_states[i-1] if i!=0 else initial_state
+            hidden_states_i = self.states[i-1] if i!=0 else initial_state
             for j,actions in enumerate(zip(self.weights_hidden,self.biases_hidden,hidden_states_i)):
                 #extract the hidden_weights,biases, and previous state for this layer
                 #w: weight matrix for the jth layer
@@ -102,11 +104,11 @@ class RNNetwork(object):
                 #prev: previous hidden state for the jth layer in the ith time-step
                 w,b,prev_hidden = actions
                 #state_ij = tanh(hj*(state_i-1j,state_i,j-1) +bj)
-                input_state = self.hidden_states[i][j-1] if j!=0 else one_hot
-                self.hidden_states[i][j] = np.tanh(np.dot(w,np.concatenate((prev_hidden,input_state)))+b)
+                input_state = self.states[i][j-1] if j!=0 else one_hot
+                self.states[i][j] = np.tanh(np.dot(w,np.concatenate((prev_hidden,input_state)))+b)
             #after going through all layers, use the last hidden state to compute the output
             #could be made way more efficient,just making it explicit
-            self.z[i] = np.dot(self.weights_output,self.hidden_states[i][-1])+self.biases_output
+            self.z[i] = np.dot(self.weights_output,self.states[i][-1])+self.biases_output
             self.outputs[i] =activation_functions.Softmax().transform(self.z[i])
             #self.outputs[i] = np.exp(self.z[i])/np.sum(np.exp(self.z[i]))
 
@@ -145,22 +147,22 @@ class RNNetwork(object):
             dEy[targets[i]]-=1
 
             #dE_ij/dh_ij:= outer product with last layer hidden states
-            dWy+=np.dot(dEy,self.hidden_states[i][-1].transpose())
+            dWy+=np.dot(dEy,self.states[i][-1].transpose())
             dby+=dEy
             #dE_ij/dh_ij = Wy_T (dEy) back into h_ij
             half_delta =np.dot(self.weights_output.transpose(),dEy)
             #last layer hidden state dE_i/dz_ij
             # dE_ij/dz_ij = dE_ij/d_hji *dh_ij/dz_ij (unit error, same as feedforward NN)
-            delta = half_delta*(1.0-self.hidden_states[i][-1]**2)
+            delta = half_delta*(1.0-self.states[i][-1]**2)
             #dh = dE_i/dz_ij  + dE_i+1/dz_ij + ... dE_len(input)-1/dz_ij
-            dh  = delta + (dhback[-1]*(1.0-self.hidden_states[i][-1]**2))
+            dh  = delta + (dhback[-1]*(1.0-self.states[i][-1]**2))
             #fetch states for this timestep at each layer
-            hsi = self.hidden_states[i]
+            hsi = self.states[i]
             #highest layer hidden bias
             dbh[-1]+=dh
             #Wh = [Wh Wx] thus dWh = [delta (outer) hi-1,j delta(outer)h[i][j-1] ]
-            input_state = self.hidden_states[i][-2] if len(self.weights_hidden)>1 else one_hot
-            prev_hidden_state = self.hidden_states[i-1][-1] if i!=0 else self.initial_state[-1]
+            input_state = self.states[i][-2] if len(self.weights_hidden)>1 else one_hot
+            prev_hidden_state = self.states[i-1][-1] if i!=0 else self.initial_states[-1]
 
             dWh[-1]+=np.concatenate((np.dot(dh,prev_hidden_state.transpose()),\
                     np.dot(dh,input_state.transpose())),axis=1)
@@ -178,10 +180,10 @@ class RNNetwork(object):
                 #cumulative dE_i's with respect to the zij layer
                 dh = delta + dhback[-j]*(1.0-hsi[-j]**2)
                 dbh[-j]+=dh
-                prev_hidden_state = self.hidden_states[i-1][-j] if i!=0 else self.initial_state[-j]
+                prev_hidden_state = self.states[i-1][-j] if i!=0 else self.initial_states[-j]
                 input_state = hsi[-j-1]  if j!=len(self.weights_hidden) else one_hot
                 dWh[-j]+=np.concatenate((np.dot(dh,prev_hidden_state.transpose()),\
-                        np.dot(delta,input_state.transpose())),axis=1)
+                        np.dot(dh,input_state.transpose())),axis=1)
 
                 whh = self.weights_hidden[-j][:,:self.hl_size]
                 dhback[-j] =np.dot(whh,dh)
@@ -219,7 +221,7 @@ class RNNetwork(object):
         """
         #one hot representation
         ixs = []
-        h = self.initial_state
+        h = self.initial_states
         x = seed_ix
         for t in range(0,n):
             #evaluates first time step of forward pass with init state h
@@ -228,7 +230,7 @@ class RNNetwork(object):
             #just keep setting the initial_state from the prev state
             x = np.random.choice(range(0,self.vocab_size),p=self.outputs[0].ravel())
             #fetch the first step hidden state to feed into the next
-            h = self.hidden_states[0]
+            h = self.states[0]
             ixs.append(x)
         return ixs
 
@@ -272,7 +274,7 @@ class RNNetwork(object):
                 if n%100 ==0:
                     print("LOSS: %f\n" % (smooth_loss))
 
-                self.initial_state = self.hidden_states[self.max_time_step-1]
+                self.initial_states = self.states[self.max_time_step-1]
                 dWy,dWh,dby,dbh = self.backward_pass(inputs,targets)
 
 

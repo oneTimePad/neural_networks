@@ -1,5 +1,7 @@
 import numpy as np
 import regularization_functions as reg
+
+
 class LearningMethod(object):
     """
     template for a NN learning method
