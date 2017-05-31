@@ -1,8 +1,7 @@
+from recurrent_network import RNNetwork
 
 
-
-
-class LSTM(object):
+class LSTM(RNNetwork):
 
     def __init__(self,hl_size,num_hl,max_time_step,language):
 
