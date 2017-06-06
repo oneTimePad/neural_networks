@@ -40,7 +40,7 @@ class LSTM(RNNetwork):
 
     def reset_memory(self):
         #the initial hidden/cell states for all layers
-        self.initial_states = [np.zeros((hl_size,2)) for m in range(0,num_hl)]
+        self.initial_states = [np.zeros((self.hl_size,2)) for m in range(0,self.num_hl)]
 
     #just for making things clear
 

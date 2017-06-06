@@ -3,7 +3,7 @@ import lstm
 import recurrent_network
 import learning_methods
 
-file_name =
+file_name ="/home/lie/lol.txt"
 
 lang = recurrent_network.compute_language(file_name)
 
