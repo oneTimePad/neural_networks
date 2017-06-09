@@ -4,7 +4,7 @@ import cost_functions
 import activation_functions
 import learning_methods
 import regularization_functions as reg
-import mnist_loader
+import mnist as mnist_loader
 import numpy as np
 import sys
 import batch_norm as bn

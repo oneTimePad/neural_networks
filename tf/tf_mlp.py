@@ -1,6 +1,6 @@
 import tensorflow as tf
 from sklearn.metrics import accuracy_score
-import mnist_loader
+import mnist as  mnist_loader
 import pdb
 import numpy as np
 
