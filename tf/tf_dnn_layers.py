@@ -1,50 +1,69 @@
 import tensorflow as tf
-from tensorflow.contrib.layers import fully_connected
 from mnist import load_data_wrapper
 from datetime import datetime
+from functools import partial
 import numpy as np
 import random
+
+"""
+
+5-layer DNN using the layers module
+
+"""
+
 
 n_inputs = 28*28
 n_outputs = 5
 
 #hyper-params
 n_hidden = 100
-learning_rate =  .1
+learning_rate =  2
 n_epochs = 400
 batch_size = 50
+batch_norm_momentum=0.99
 
+#sometimes it is at the end and sometimes not
+bn_at_end = False
+bn=True
+
+if bn_at_end and not bn:
+    raise Exception("Cant have no hidden layer bn but outer layer bn")
 
 X = tf.placeholder(tf.float32, shape=(None,n_inputs),name="X")
 y = tf.placeholder(tf.int64,   shape=(None),name="y")
 
-bn = False
 
-if bn:
-
-    from tensorflow.contrib.layers import batch_norm
+with tf.name_scope("dnn"):
+    he_init = tf.contrib.layers.variance_scaling_initializer()
     is_training = tf.placeholder(tf.bool,shape=(),name="is_training")
-    bn_params = {
-            'is_training': is_training,
-            'decay': .99,
-            'updates_collections': None,
-            "scale":True
-    }
 
-with tf.contrib.framework.arg_scope(
-            [fully_connected],
-            num_outputs = n_hidden,
-            weights_initializer=tf.contrib.layers.variance_scaling_initializer(),
-            activation_fn=tf.nn.elu,
-            normalizer_fn = batch_norm if bn else None,
-            normalizer_params=bn_params if bn else None
-            ):
-            hidden1 = fully_connected(X,scope="hidden1")
-            hidden2 = fully_connected(hidden1,scope="hidden2")
-            hidden3 = fully_connected(hidden2,scope="hidden3")
-            hidden4 = fully_connected(hidden3,scope="hidden4")
-            hidden5 = fully_connected(hidden4,scope="hidden5")
-            logits = fully_connected(hidden5,num_outputs=n_outputs,activation_fn=None,scope="logits")
+    def batch_layer(X,bn=True,name="hidden"):
+        global n_hidden
+        batch_norm_layer = partial(
+                            tf.layers.batch_normalization,
+                            training=is_training,
+                            momentum=batch_norm_momentum
+        )
+        dense_layer     = partial(
+                            tf.layers.dense,
+                            kernel_initializer=he_init,
+                            units = n_hidden
+        )
+        with tf.name_scope(name):
+            dense = dense_layer(X)
+            return batch_norm_layer(dense) if bn else dense
+
+
+
+    elu_tf = tf.nn.elu
+
+    #network
+    h1 = elu_tf(batch_layer(X,bn))
+    h2 = elu_tf(batch_layer(h1,bn))
+    h3 = elu_tf(batch_layer(h2,bn))
+    h4 = elu_tf(batch_layer(h3,bn))
+    h5 = elu_tf(batch_layer(h4,bn))
+    logits = batch_layer(h5,bn=bn_at_end,name="logits")
 
 with tf.name_scope("loss"):
     xentropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
@@ -53,7 +72,10 @@ with tf.name_scope("loss"):
 
 with tf.name_scope("train"):
     optimizer = tf.train.GradientDescentOptimizer(learning_rate)
-    training_op = optimizer.minimize(loss)
+    #account for batch norm updates: mean,gamma,beta
+    extra_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+    with tf.control_dependencies(extra_update_ops):
+        training_op = optimizer.minimize(loss)
 
 with tf.name_scope("eval"):
     correct = tf.nn.in_top_k(logits,y,1)
