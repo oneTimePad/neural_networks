@@ -50,7 +50,7 @@ class FCNetwork(object):
         drop = self.drop_out
         for x,y in mini_batch:
             #drop out each unit in all hidden layer
-            drop_masks = [ (np.random.randn(*self.biases[i].shape) <drop)/drop for i in range(0,len(self.biases)-1)] if drop else None
+            drop_masks = [ (np.random.randn(*self.biases[i].shape) <(1-drop))/(1-drop) for i in range(0,len(self.biases)-1)] if drop else None
 
             #add dropout to the input layer
             drop_masks = [(np.random.randn(self.network_topology[0],1) <drop)/drop] +drop_masks if drop else None

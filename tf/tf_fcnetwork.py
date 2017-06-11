@@ -89,6 +89,7 @@ class FCNetwork(object):
                 ]
                 for mini_batch in mini_batchs:
                     x,y = numpy_to_tensorflow_training(mini_batch)
+
                     sess.run(self.training_opt,feed_dict={self.input:x,self.ground_truth:y})
 
 

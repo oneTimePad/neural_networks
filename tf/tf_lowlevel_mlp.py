@@ -1,5 +1,5 @@
 
-
+from datetime import datetime
 import tensorflow as tf
 import numpy as np
 import gzip
@@ -73,6 +73,12 @@ n_epochs = 400
 batch_size = 50
 with tf.Session() as sess:
     init.run()
+    now  = datetime.utcnow().strftime(("%Y%m%d%H%M%S"))
+    root_logdir = "tf_logs"
+    logdir = "{}/run-{}".format(root_logdir,now)
+
+    file_writer = tf.summary.FileWriter(logdir,tf.get_default_graph())
+    cost_log = tf.summary.scalar("Cost",loss)
     for epoch in range(n_epochs):
         for iteration in range(mnist.train.num_examples // batch_size):
             X_batch,y_batch = mnist.train.next_batch(batch_size)
@@ -80,4 +86,6 @@ with tf.Session() as sess:
         acc_train = accuracy.eval(feed_dict={X:X_batch,y:y_batch})
         acc_test = accuracy.eval(feed_dict={X:mnist.test.images,y:mnist.test.labels})
         print(epoch, "Train accuracy:",acc_train,"Test accuracy:",acc_test)
+        cost = cost_log.eval(feed_dict={X:X_batch,y:y_batch})
+        file_writer.add_summary(cost,epoch)
     save_path = saver.save(sess,"./model.ckpt")
