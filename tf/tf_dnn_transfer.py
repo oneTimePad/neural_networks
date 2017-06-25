@@ -3,8 +3,7 @@ import numpy as np
 from datetime import datetime
 from mnist import load_data_wrapper
 import random
-
-#train,valid,test = load_data_wrapper()
+import sys
 
 def numpy_to_tf(training_data):
     unzip = list(zip(*training_data))
@@ -46,7 +45,7 @@ with tf.Session() as sess:
     #obtain the last hidden layer
 
     hidden_5 = graph.get_tensor_by_name("dnn/Elu_4:0")
-
+    hidden_5 = tf.stop_gradient(hidden_5)
     #construct new output layer
     he_init = tf.contrib.layers.variance_scaling_initializer()
     logits = tf.layers.dense(hidden_5,kernel_initializer=he_init,units=n_outputs,name="trans_logits")
@@ -54,7 +53,6 @@ with tf.Session() as sess:
     new_layer_init = tf.variables_initializer(graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,scope="trans_logits"))
     sess.run(new_layer_init)
 
-    train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,scope="trans_logits")
 
     #loss and training
     with tf.name_scope("transfer_loss"):
@@ -62,15 +60,23 @@ with tf.Session() as sess:
         xentropy = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y,logits=logits)
         loss = tf.reduce_mean(xentropy)
     with tf.name_scope("transfer_train"):
+        #https://stackoverflow.com/questions/952914/making-a-flat-list-out-of-list-of-lists-in-python
+        #change the scopes to edit add/delete trainable variables
+        dense_scopes = ["trans_logits"]
+        train_vars = sum([tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,scope=s) for s in dense_scopes],[])
+        #change the scopes to edit add/delete batch_norm variables
+        batch_scopes = []
+        extra_update_ops = sum([tf.get_collection(tf.GraphKeys.UPDATE_OPS,scope=s) for s in batch_scopes],[])
+
         optimizer = tf.train.AdamOptimizer(learning_rate)
-        #account for batch norm updates: mean,gamma,beta
-        extra_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+
+        print(extra_update_ops)
         with tf.control_dependencies(extra_update_ops):
             training_op = optimizer.minimize(loss,var_list=train_vars)
         #https://stackoverflow.com/questions/41533489/how-to-initialize-only-optimizer-variables-in-tensorflow
         adam_initializers = [var.initializer for var in tf.global_variables() if 'transfer_train' in var.name or 'Adam' in var.name]
         sess.run(adam_initializers)
-    y = graph.get_tensor_by_name("y:0")
+
     with tf.name_scope("trans_eval"):
         correct = tf.nn.in_top_k(logits,y,1)
         accuracy = tf.reduce_mean(tf.cast(correct,tf.float32))
@@ -89,12 +95,16 @@ with tf.Session() as sess:
     #perform some conversion to make train list into X,y
     train = list(zip(*extract_from_n(numpy_to_tf(train),n)))
 
-
-
     num_train = len(train)
 
     file_writer = tf.summary.FileWriter(logdir,tf.get_default_graph())
     cost_log = tf.summary.scalar("Cost",loss)
+
+    #cache layers
+    X_train,y_train = zip(*train)
+    hidden5_outputs = sess.run(hidden_5,feed_dict={"X:0":X_train,"dnn/is_training:0":False})
+    train = list(zip(hidden5_outputs,y_train))
+
 
     for epoch in range(n_epochs):
 
@@ -110,11 +120,12 @@ with tf.Session() as sess:
         for batch_index,batch in enumerate(mini_batchs):
             X_batch,y_batch = batch
 
-            sess.run(training_op,feed_dict={"X:0":X_batch,"y:0":y_batch,"dnn/is_training:0":True})
+            sess.run(training_op,feed_dict={'dnn/Elu_4:0':X_batch,"y:0":y_batch,"dnn/is_training:0":True})#feed_dict={'dnn/Elu_4:0':X_batch,"y:0":y_batch,"dnn/is_training:0":True})
 
             if batch_index%10 ==0:
                 step = epoch*num_batch +batch_index
-                cost_now = cost_log.eval(feed_dict={"X:0":X_batch,"y:0":y_batch,"dnn/is_training:0":False})
+                #cost_now = cost_log.eval(feed_dict={"X:0":X_batch,"y:0":y_batch,"dnn/is_training:0":False})
+                cost_now = cost_log.eval(feed_dict={"dnn/Elu_4:0":X_batch,"y:0":y_batch,"dnn/is_training:0":False})
                 file_writer.add_summary(cost_now,step)
 
         print("EPOCH: %d " %epoch,end="")
