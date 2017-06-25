@@ -1,3 +1,5 @@
 */__pycache__/*
 */*.pyc
 tf/tf_logs
+tf/my*
+tf/checkpoint

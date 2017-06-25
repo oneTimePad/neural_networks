@@ -4,7 +4,7 @@ from datetime import datetime
 from functools import partial
 import numpy as np
 import random
-
+import sys
 """
 
 5-layer DNN using the layers module
@@ -13,7 +13,7 @@ import random
 
 
 n_inputs = 28*28
-n_outputs = 5
+n_outputs = 4
 
 #hyper-params
 n_hidden = 100
@@ -37,7 +37,7 @@ with tf.name_scope("dnn"):
     he_init = tf.contrib.layers.variance_scaling_initializer()
     is_training = tf.placeholder(tf.bool,shape=(),name="is_training")
 
-    def batch_layer(X,bn=True,name="hidden"):
+    def batch_layer(X,bn=True,units=n_hidden,name="hidden"):
         global n_hidden
         batch_norm_layer = partial(
                             tf.layers.batch_normalization,
@@ -47,7 +47,7 @@ with tf.name_scope("dnn"):
         dense_layer     = partial(
                             tf.layers.dense,
                             kernel_initializer=he_init,
-                            units = n_hidden
+                            units = units
         )
         with tf.name_scope(name):
             dense = dense_layer(X)
@@ -63,12 +63,15 @@ with tf.name_scope("dnn"):
     h3 = elu_tf(batch_layer(h2,bn))
     h4 = elu_tf(batch_layer(h3,bn))
     h5 = elu_tf(batch_layer(h4,bn))
-    logits = batch_layer(h5,bn=bn_at_end,name="logits")
+    logits = batch_layer(h5,bn=bn_at_end,units=n_outputs,name="logits")
+
 
 with tf.name_scope("loss"):
     xentropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
                 labels = y,logits =logits)
     loss = tf.reduce_mean(xentropy,name="loss")
+
+
 
 with tf.name_scope("train"):
     optimizer = tf.train.GradientDescentOptimizer(learning_rate)
@@ -78,7 +81,8 @@ with tf.name_scope("train"):
         training_op = optimizer.minimize(loss)
 
 with tf.name_scope("eval"):
-    correct = tf.nn.in_top_k(logits,y,1)
+    #correct = tf.nn.in_top_k(logits,y,1)
+    correct = tf.nn.in_top_k(tf.get_default_graph().get_tensor_by_name("dnn/logits/dense/BiasAdd:0"),y,1)
     accuracy = tf.reduce_mean(tf.cast(correct,tf.float32))
 
 
@@ -88,12 +92,14 @@ def numpy_to_tf(training_data):
     x = list(unzip[0])
     y = list(unzip[1])
     return x,y
+
 def extract_first_n(tf_training_data,n):
     x,y = tf_training_data
     x = [t.ravel() for t,m in zip(x,y) if (sum(m[:n])!=0 if not isinstance(m,np.int64) else (m<n))]
     f = lambda t : np.argmax(t) if not isinstance(t,np.int64) else t
     y = [f(t) for t in y if (sum(t[:n])!=0  if not isinstance(t,np.int64) else (t<n))]
     return x,y
+
 
 
 
@@ -125,8 +131,9 @@ with tf.Session() as sess:
     for epoch in range(n_epochs):
         if epoch % 100 == 0:
             ckpt_save = logdir+"/"+"model.ckpt"
-            save_path = saver.save(sess,ckpt_save)
-
+            save_path = saver.save(sess,"./mymode.ckpt")
+        if epoch == 5:
+            break
         #shuffle X,y together
         random.shuffle(train)
         X_train,y_train = zip(*train)
@@ -141,6 +148,7 @@ with tf.Session() as sess:
             sess.run(training_op,feed_dict={X:X_batch,y:y_batch,is_training:True} if bn else {X:X_batch,y:y_batch})
 
             if batch_index%10 ==0:
+
                 step = epoch*num_batch +batch_index
                 cost_now = cost_log.eval(feed_dict={X:X_batch,y:y_batch,is_training:False} if bn else {X:X_batch,y:y_batch})
                 file_writer.add_summary(cost_now,step)
@@ -156,4 +164,6 @@ with tf.Session() as sess:
             print(", valid: %f" % accuracy_score,end="")
         print("\n")
 
-    save_path = saver.save(sess,logidr+"/"+"model.ckpt")
+
+    #save_path = saver.save(sess,logdir+"/"+"model.ckpt")
+    save_path = saver.save(sess,"mymode.ckpt")
