@@ -62,10 +62,10 @@ with tf.Session() as sess:
     with tf.name_scope("transfer_train"):
         #https://stackoverflow.com/questions/952914/making-a-flat-list-out-of-list-of-lists-in-python
         #change the scopes to edit add/delete trainable variables
-        dense_scopes = ["trans_logits"]
+        dense_scopes = ["trans_logits","dense_4"]
         train_vars = sum([tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,scope=s) for s in dense_scopes],[])
         #change the scopes to edit add/delete batch_norm variables
-        batch_scopes = []
+        batch_scopes = ["dnn/hidden_4"]
         extra_update_ops = sum([tf.get_collection(tf.GraphKeys.UPDATE_OPS,scope=s) for s in batch_scopes],[])
 
         optimizer = tf.train.AdamOptimizer(learning_rate)
@@ -99,11 +99,16 @@ with tf.Session() as sess:
     file_writer = tf.summary.FileWriter(logdir,tf.get_default_graph())
     cost_log = tf.summary.scalar("Cost",loss)
 
-    #cache layers
-    X_train,y_train = zip(*train)
-    hidden_cache = graph.get_tensor_by_name("dnn/Elu_4:0")
-    hidden_outputs = sess.run(hidden_cache,feed_dict={"X:0":X_train,"dnn/is_training:0":False})
-    train = list(zip(hidden_outputs,y_train))
+    #defines input layer when training(this layer and above are frozen and cached)
+    #set to "X:0" to no cache
+    last_frozen = "dnn/Elu_3:0"
+
+    if last_frozen != "X:0":
+        #cache layers
+        X_train,y_train = zip(*train)
+        hidden_cache = graph.get_tensor_by_name(last_frozen)
+        hidden_outputs = sess.run(hidden_cache,feed_dict={"X:0":X_train,"dnn/is_training:0":False})
+        train = list(zip(hidden_outputs,y_train))
 
 
     for epoch in range(n_epochs):
@@ -120,12 +125,12 @@ with tf.Session() as sess:
         for batch_index,batch in enumerate(mini_batchs):
             X_batch,y_batch = batch
 
-            sess.run(training_op,feed_dict={'dnn/Elu_4:0':X_batch,"y:0":y_batch,"dnn/is_training:0":True})#feed_dict={'dnn/Elu_4:0':X_batch,"y:0":y_batch,"dnn/is_training:0":True})
+            sess.run(training_op,feed_dict={last_frozen:X_batch,"y:0":y_batch,"dnn/is_training:0":True})#feed_dict={'dnn/Elu_4:0':X_batch,"y:0":y_batch,"dnn/is_training:0":True})
 
             if batch_index%10 ==0:
                 step = epoch*num_batch +batch_index
                 #cost_now = cost_log.eval(feed_dict={"X:0":X_batch,"y:0":y_batch,"dnn/is_training:0":False})
-                cost_now = cost_log.eval(feed_dict={"dnn/Elu_4:0":X_batch,"y:0":y_batch,"dnn/is_training:0":False})
+                cost_now = cost_log.eval(feed_dict={last_frozen:X_batch,"y:0":y_batch,"dnn/is_training:0":False})
                 file_writer.add_summary(cost_now,step)
 
         print("EPOCH: %d " %epoch,end="")
