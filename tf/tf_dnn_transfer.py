@@ -45,7 +45,7 @@ with tf.Session() as sess:
     #obtain the last hidden layer
 
     hidden_5 = graph.get_tensor_by_name("dnn/Elu_4:0")
-    hidden_5 = tf.stop_gradient(hidden_5)
+
     #construct new output layer
     he_init = tf.contrib.layers.variance_scaling_initializer()
     logits = tf.layers.dense(hidden_5,kernel_initializer=he_init,units=n_outputs,name="trans_logits")
@@ -70,7 +70,6 @@ with tf.Session() as sess:
 
         optimizer = tf.train.AdamOptimizer(learning_rate)
 
-        print(extra_update_ops)
         with tf.control_dependencies(extra_update_ops):
             training_op = optimizer.minimize(loss,var_list=train_vars)
         #https://stackoverflow.com/questions/41533489/how-to-initialize-only-optimizer-variables-in-tensorflow
@@ -102,8 +101,9 @@ with tf.Session() as sess:
 
     #cache layers
     X_train,y_train = zip(*train)
-    hidden5_outputs = sess.run(hidden_5,feed_dict={"X:0":X_train,"dnn/is_training:0":False})
-    train = list(zip(hidden5_outputs,y_train))
+    hidden_cache = graph.get_tensor_by_name("dnn/Elu_4:0")
+    hidden_outputs = sess.run(hidden_cache,feed_dict={"X:0":X_train,"dnn/is_training:0":False})
+    train = list(zip(hidden_outputs,y_train))
 
 
     for epoch in range(n_epochs):
