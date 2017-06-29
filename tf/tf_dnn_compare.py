@@ -13,8 +13,8 @@ n_inputs = 28 * 28
 n_hidden = 100
 n_outputs = 1
 n_epochs = 10
-learning_rate = 1
-batch_size = 50
+learning_rate = .1
+batch_size = 500
 
 
 
@@ -40,6 +40,8 @@ def batch_layer(X,bn=True,units=n_hidden,name="hidden"):
 
 elu_tf = tf.nn.elu
 
+#X = tf.placeholder(tf.float32, shape=(None, 2, n_inputs), name="X")
+#Xa, Xb = tf.unstack(X, axis=1)
 Xa = tf.placeholder(tf.float32, shape=(None,n_inputs),name="Xa")
 with tf.name_scope("dnna"):
     #network A
@@ -48,7 +50,7 @@ with tf.name_scope("dnna"):
     dnna_h3 = elu_tf(batch_layer(dnna_h2))
     dnna_h4 = elu_tf(batch_layer(dnna_h3))
     dnna_h5 = elu_tf(batch_layer(dnna_h4))
-    logits = tf.layers.dense(dnna_h5,units=1)
+
 Xb = tf.placeholder(tf.float32, shape=(None,n_inputs),name="Xb")
 with tf.name_scope("dnnb"):
     #network B
@@ -57,16 +59,18 @@ with tf.name_scope("dnnb"):
     dnnb_h3 = elu_tf(batch_layer(dnnb_h2))
     dnnb_h4 = elu_tf(batch_layer(dnnb_h3))
     dnnb_h5 = elu_tf(batch_layer(dnnb_h4))
-y = tf.placeholder(tf.float32,   shape=(None),name="y")
+y = tf.placeholder(tf.int64,   shape=(None),name="y")
 
 with tf.name_scope("output"):
     #single output unit
     dnn_out = tf.concat([dnna_h5,dnnb_h5],axis=1)
-    logits = batch_layer(dnn_out,bn=False,units=n_outputs,name="logit")
+    dnn_h = elu_tf(batch_layer(dnn_out,bn=False,units=10,name="middle"))
+    logits = batch_layer(dnn_h,bn=False,units=n_outputs,name="logit")
 
 
 with tf.name_scope("loss"):
-    xentropy = tf.nn.sigmoid_cross_entropy_with_logits(labels =y, logits=logits)
+    y_float =tf.cast(y,tf.float32)
+    xentropy = tf.nn.sigmoid_cross_entropy_with_logits(labels =y_float, logits=logits)
     loss = tf.reduce_mean(xentropy,name="loss")
 
 with tf.name_scope("train"):
@@ -77,7 +81,8 @@ with tf.name_scope("train"):
         training_op = optimizer.minimize(loss)
 
 with tf.name_scope("eval"):
-    correct = tf.equal(tf.cast(tf.greater_equal(logits,0.5),tf.float32),y)
+    y_float =tf.cast(y,tf.float32)
+    correct = tf.equal(tf.cast(tf.greater_equal(logits,0),tf.float32),y_float)
     accuracy = tf.reduce_mean(tf.cast(correct,tf.float32))
 
 def np_to_tf(training_data):
@@ -91,14 +96,11 @@ def np_to_tf(training_data):
     x = list(unzip[0])
     y = list(unzip[1])
     x = [t.ravel() for t in x]
-    y = [t.ravel() for t in y]
+    y = [np.argmax(t.ravel()) for t in y]
     return x,y
-
+"""
 def batch_gen(training_data,batch_size):
-    """
-    splits training data into batches of tuples that contain images of the same digit
-    and images of different digits
-    """
+
     training_data =  copy.deepcopy(training_data)
     xa_batchs = []
     xb_batchs =[]
@@ -126,7 +128,7 @@ def batch_gen(training_data,batch_size):
             if  same or different:
                 xa_batch.append(element[0])
                 xb_batch.append(training_data.pop(start)[0])
-                y_batch.append(same)
+                y_batch.append([int(different)])
                 i+=1
                 try:
                     element = training_data[start+1]
@@ -146,12 +148,39 @@ def batch_gen(training_data,batch_size):
         xa_batch =[]
         xb_batch = []
         y_batch = []
+    #import pdb;pdb.set_trace()
     return zip(xa_batchs,xb_batchs,y_batchs)
+
+def generate_batch(train, batch_size):
+    images,labels = np_to_tf(train)
+    size1 = batch_size // 2
+    size2 = batch_size - size1
+    if size1 != size2 and np.random.rand() > 0.5:
+        size1, size2 = size2, size1
+    Xa = []
+    Xb = []
+    y = []
+    while len(Xa) < size1:
+        rnd_idx1, rnd_idx2 = np.random.randint(0, len(images), 2)
+        if rnd_idx1 != rnd_idx2 and labels[rnd_idx1] == labels[rnd_idx2]:
+            #X.append(np.array([images[rnd_idx1], images[rnd_idx2]]))
+            Xa.append(images[rnd_idx1])
+            Xb.append(images[rnd_idx2])
+            y.append([1])
+    while len(Xa) < batch_size:
+        rnd_idx1, rnd_idx2 = np.random.randint(0, len(images), 2)
+        if labels[rnd_idx1] != labels[rnd_idx2]:
+            #X.append(np.array([images[rnd_idx1], images[rnd_idx2]]))
+            Xa.append(images[rnd_idx1])
+            Xb.append(images[rnd_idx2])
+            y.append([0])
+    rnd_indices = np.random.permutation(batch_size)
+    #import pdb;pdb.set_trace()
+    return np.array(Xa)[rnd_indices], np.array(Xb)[rnd_indices],np.array(y)[rnd_indices]
 
 train,valid,test = load_data_wrapper()
 
 train = list(train)
-
 
 
 init = tf.global_variables_initializer()
@@ -167,17 +196,79 @@ with tf.Session() as sess:
     for epoch in range(n_epochs):
 
         random.shuffle(train)
+        #random.shuffle(train)
         batch_index = 0
-        batchs = batch_gen(train,batch_size)
-        print(len(train))
-        for xa_batch,xb_batch,y_batch in batchs:
+        #batchs = generate_batch(train,batch_size)
+        #print(len(train))
+        num_batch = len(train) //batch_size
+        for i in range(num_batch):
+        #for xa_batch,xb_batch,y_batch in batchs:
+            #print(len(xa_batch))
+            #rnd_indices = np.random.permutation(len(y_batch))
+            #xa_batch = np.array(xa_batch)[rnd_indices]
+            #xb_batch = np.array(xb_batch)[rnd_indices]
+            #y_batch = np.array(y_batch)[rnd_indices]
+            xa_batch,xb_batch,y_batch = generate_batch(train,batch_size)
             sess.run(training_op,feed_dict={Xa:xa_batch,Xb:xb_batch,y:y_batch,is_training:True})
             if batch_index%10 ==0:
                 step = epoch*num_batch +batch_index
                 cost_now = cost_log.eval(feed_dict={Xa:xa_batch,Xb:xb_batch,y:y_batch,is_training:False})
-                print(accuracy.eval(feed_dict={Xa:xa_batch,Xb:xb_batch,y:y_batch,is_training:False}))
+                print("ACC:%f" %accuracy.eval(feed_dict={Xa:xa_batch,Xb:xb_batch,y:y_batch,is_training:False}))
+                print(loss.eval(feed_dict={Xa:xa_batch,Xb:xb_batch,y:y_batch,is_training:False}))
                 file_writer.add_summary(cost_now,step)
             batch_index+=1
 
         print("EPOCH: %d " %epoch,end="")
         print("\n")
+
+"""
+def generate_batch(images, labels, batch_size):
+    size1 = batch_size // 2
+    size2 = batch_size - size1
+    if size1 != size2 and np.random.rand() > 0.5:
+        size1, size2 = size2, size1
+    Xa = []
+    Xb = []
+    y = []
+    while len(Xa) < size1:
+        rnd_idx1, rnd_idx2 = np.random.randint(0, len(images), 2)
+        if rnd_idx1 != rnd_idx2 and labels[rnd_idx1] == labels[rnd_idx2]:
+            #X.append(np.array([images[rnd_idx1], images[rnd_idx2]]))
+            Xa.append(images[rnd_idx1])
+            Xb.append(images[rnd_idx2])
+            y.append([1])
+    while len(Xa) < batch_size:
+        rnd_idx1, rnd_idx2 = np.random.randint(0, len(images), 2)
+        if labels[rnd_idx1] != labels[rnd_idx2]:
+            #X.append(np.array([images[rnd_idx1], images[rnd_idx2]]))
+            Xa.append(images[rnd_idx1])
+            Xb.append(images[rnd_idx2])
+            y.append([0])
+    rnd_indices = np.random.permutation(batch_size)
+
+    return np.array(Xa)[rnd_indices], np.array(Xb)[rnd_indices],np.array(y)[rnd_indices]
+from tensorflow.examples.tutorials.mnist import input_data
+#change
+mnist = input_data.read_data_sets("/home/lie/Downloads/MNIST")
+
+X_train1 = mnist.train.images
+y_train1 = mnist.train.labels
+X_train2 = mnist.validation.images
+y_train2 = mnist.validation.labels
+X_test = mnist.test.images
+y_test = mnist.test.labels
+Xa_test1,Xb_test1, y_test1 = generate_batch(X_test, y_test, batch_size=len(X_test))
+n_epochs = 100
+batch_size = 500
+
+init = tf.global_variables_initializer()
+with tf.Session() as sess:
+    init.run()
+    for epoch in range(n_epochs):
+        for iteration in range(mnist.train.num_examples // batch_size):
+            Xa_batch,Xb_batch, y_batch = generate_batch(X_train1, y_train1, batch_size)
+            loss_val, _ = sess.run([loss, training_op], feed_dict={Xa: Xa_batch,Xb:Xb_batch, y: y_batch,is_training:True})
+        print(epoch, "Train loss:", loss_val)
+        if epoch % 5 == 0:
+            acc_test = accuracy.eval(feed_dict={Xa: Xa_test1,Xb:Xb_test1, y: y_test1,is_training:False})
+            print(epoch, "Test accuracy:", acc_test)

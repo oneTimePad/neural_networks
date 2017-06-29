@@ -26,7 +26,7 @@ valid_data = False
 n_outputs = 5
 learning_rate = .5
 n_epochs = 400
-batch_size = 50
+batch_size = 20
 
 test_data = True
 valid_data = False
@@ -63,9 +63,11 @@ with tf.Session() as sess:
         #https://stackoverflow.com/questions/952914/making-a-flat-list-out-of-list-of-lists-in-python
         #change the scopes to edit add/delete trainable variables
         dense_scopes = ["trans_logits","dense_4"]
+        dense_scopes = ["trans_logits"]
         train_vars = sum([tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,scope=s) for s in dense_scopes],[])
         #change the scopes to edit add/delete batch_norm variables
         batch_scopes = ["dnn/hidden_4"]
+        batch_scopes = []
         extra_update_ops = sum([tf.get_collection(tf.GraphKeys.UPDATE_OPS,scope=s) for s in batch_scopes],[])
 
         optimizer = tf.train.AdamOptimizer(learning_rate)
@@ -101,7 +103,7 @@ with tf.Session() as sess:
 
     #defines input layer when training(this layer and above are frozen and cached)
     #set to "X:0" to no cache
-    last_frozen = "dnn/Elu_3:0"
+    last_frozen = "dnn/Elu_4:0"
 
     if last_frozen != "X:0":
         #cache layers
