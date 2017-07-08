@@ -92,7 +92,8 @@ with tf.name_scope('flower_output'):
     pre_logits = end_points['PreLogits']
     logits = tf.layers.conv2d(pre_logits,kernel_size=1,strides=1,filters=5,padding='SAME',name='flower_logits')
     prediction = tf.nn.softmax(logits,name='flower_softmax')
-    logits_full = tf.reshape(logits,shape=[-1,NUM_OUT])
+    #logits_full = tf.reshape(logits,shape=[-1,NUM_OUT])
+    logits_full = tf.squeeze(logits)
 
 with tf.name_scope('flower_loss'):
     label64 = tf.cast(label_batch,tf.int64)
@@ -122,7 +123,8 @@ with tf.name_scope('flower_train'):
     tf.summary.scalar('learning_rate',lr)
 
     with tf.control_dependencies([loss_avg_op]):
-        sgd_op = tf.train.GradientDescentOptimizer(lr)
+        train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,scope='flower_logits')
+        sgd_op = tf.train.GradientDescentOptimizer(lr,var_list=train_vars)
         grads = sgd_op.compute_gradients(loss)
     apply_grads_op = sgd.apply_gradients(grads,global_step=global_step)
     #track values of gradients and variables
