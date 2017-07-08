@@ -20,7 +20,7 @@ pool3_fmaps = conv2_fmaps
 
 n_fc1 = 64
 n_outputs = 10
-"""
+
 with tf.name_scope("inputs"):
     X= tf.placeholder(tf.float32, shape=[None,n_inputs],name="X")
     X_reshaped = tf.reshape(X,shape=[-1,height,width,channels])
@@ -57,13 +57,14 @@ with tf.name_scope("eval"):
 with tf.name_scope("init_and_save"):
     init = tf.global_variables_initializer()
     saver = tf.train.Saver()
-"""
+
 from tensorflow.examples.tutorials.mnist import input_data
 #change
-mnist = input_data.read_data_sets("/home/lie/Downloads/MNIST")
+mnist = input_data.read_data_sets("C:\\sers\\MTechLap\\Downloads\\mnist-train")
 
 n_epochs = 10
 batch_size = 100
+"""
 from datetime import datetime
 now  = datetime.utcnow().strftime(("%Y%m%d%H%M%S"))
 root_logdir = "tf_logs"
@@ -73,9 +74,10 @@ with tf.Session() as sess:
     #saver.restore(sess,"./my_mnist_model.ckpt")
     file_writer = tf.summary.FileWriter(logdir,tf.get_default_graph())
     print(tf.get_default_graph().get_all_collection_keys())
-
 """
-with tf.Session() as sess:
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+with tf.Session(config=config) as sess:
     init.run()
     for epoch in range(n_epochs):
         for iteration in range(mnist.train.num_examples // batch_size):
@@ -86,4 +88,4 @@ with tf.Session() as sess:
         print(epoch, "Train accuracy:", acc_train, "Test accuracy:", acc_test)
 
         save_path = saver.save(sess, "./my_mnist_model")
-"""
+
