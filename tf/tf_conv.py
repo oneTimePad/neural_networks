@@ -79,6 +79,7 @@ config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 with tf.Session(config=config) as sess:
     init.run()
+    print([v.eval() for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,scope="conv1")])
     for epoch in range(n_epochs):
         for iteration in range(mnist.train.num_examples // batch_size):
             X_batch,y_batch = mnist.train.next_batch(batch_size)
