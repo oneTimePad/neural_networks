@@ -108,7 +108,7 @@ with tf.Session() as sess:
     if last_frozen != "X:0":
         #cache layers
         X_train,y_train = zip(*train)
-        hidden_cache = graph.get_tensor_by_name(last_frozen)
+        hidden_cache = tf.get_default_graph().get_tensor_by_name(last_frozen)
         hidden_outputs = sess.run(hidden_cache,feed_dict={"X:0":X_train,"dnn/is_training:0":False})
         train = list(zip(hidden_outputs,y_train))
 
