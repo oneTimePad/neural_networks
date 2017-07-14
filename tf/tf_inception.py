@@ -14,13 +14,13 @@ https://github.com/ageron/handson-ml/blob/master/13_convolutional_neural_network
 HEIGHT= 299
 WIDTH = 299
 DEPTH = 3
-BATCH_SIZE = 20
+BATCH_SIZE = 50
 NUM_EPOCHS = 100
 NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 500
 FRACTION_IN_QUEUE = 0.4
 NUM_EPOCHS_PER_DECAY=1000
 NUM_OUT = 5
-INITIAL_LEARNING_RATE = 0.1
+INITIAL_LEARNING_RATE = 0.01
 DECAY_RATE = 0.96
 LOG_FREQUENCY = 10
 LOGDIR = '/tmp/inception'
@@ -52,8 +52,9 @@ def parse_data(filenames):
 	label = tf.cast(tf.strided_slice(record_bytes,[0],[label_bytes]),tf.int32)
 
 	image_part_linear = tf.strided_slice(record_bytes,[label_bytes],[label_bytes+image_bytes])
-	image = tf.reshape(image_part_linear,[DEPTH,HEIGHT,WIDTH])
-	image = tf.transpose(image,[1,2,0])
+	#image = tf.reshape(image_part_linear,[DEPTH,HEIGHT,WIDTH])
+	#image = tf.transpose(image,[1,2,0])
+	image = tf.reshape(image_part_linear,[HEIGHT,WIDTH,DEPTH])
 	return (key,image,label)
 
 def format_input(image,label):
@@ -149,11 +150,15 @@ with tf.name_scope('flower_train'):
 		tf.summary.histogram(var.op.name,var)
 	#get a moving average of all variables
 	variable_avg = tf.train.ExponentialMovingAverage(
-			0.9,global_step,name="LOL")
+			0.9,global_step)
 	variable_avg_op = variable_avg.apply(tf.trainable_variables())
 
 	with tf.control_dependencies([apply_grads_op,variable_avg_op]):
 		train_op = tf.no_op(name='flower_train_op')
+
+with tf.name_scope('eval'):
+	correct = tf.nn.in_top_k(logits_full,label_batch,1)
+	accuracy = tf.reduce_mean(tf.cast(correct,tf.float32))
 
 class _LoggerHook(tf.train.SessionRunHook):
 
@@ -162,7 +167,7 @@ class _LoggerHook(tf.train.SessionRunHook):
 		self._start_time = time.time()
 	def before_run(self,run_context):
 		self._step+=1
-		return tf.train.SessionRunArgs(loss)
+		return tf.train.SessionRunArgs([loss,accuracy])
 
 	def after_run(self,run_context,run_values):
 		if self._step % LOG_FREQUENCY == 0:
@@ -170,13 +175,14 @@ class _LoggerHook(tf.train.SessionRunHook):
 			duration = current_time - self._start_time
 			self._start_time = current_time
 
-			loss_value = run_values.results
+			loss_value = run_values.results[0]
+			acc = run_values.results[1]
 			examples_per_sec = LOG_FREQUENCY/duration
 			sec_per_batch = duration / LOG_FREQUENCY
 
-			format_str = ('%s: step %d, loss = %.2f (%.1f examples/sec; %.3f sec/batch)')
+			format_str = ('%s: step %d, loss = %.2f, acc = %.2f (%.1f examples/sec; %.3f sec/batch)')
 
-			print(format_str %(datetime.now(),self._step,loss_value,
+			print(format_str %(datetime.now(),self._step,loss_value,acc,
 				examples_per_sec,sec_per_batch))
 
 config = tf.ConfigProto()
