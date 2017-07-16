@@ -10,7 +10,7 @@ and
 https://github.com/ageron/handson-ml/blob/master/13_convolutional_neural_networks.ipynb
 """
 
-
+MODE = 'train'
 HEIGHT= 299
 WIDTH = 299
 DEPTH = 3
@@ -23,9 +23,9 @@ NUM_OUT = 5
 INITIAL_LEARNING_RATE = 0.01
 DECAY_RATE = 0.96
 LOG_FREQUENCY = 10
-LOGDIR = '/tmp/inception'
+LOGDIR = '/tmp/inception_new3'
 FLOWERS_DIR = 'C:/Users/MTechLap/Desktop/models/tutorials/image/cifar10/flowers_train.bin'
-INCEPTION_V3_CHECKPOINT =  'C:/Users/MTechLap/Desktop/models/tutorials/image/cifar10/datasets/inception/inception_v3.ckpt'
+INCEPTION_V3_CHECKPOINT = 'C:/Users/MTechLap/Desktop/models/tutorials/image/cifar10/datasets/inception/inception_v3.ckpt'
 def parse_data(filenames):
 	"""
 	args:
@@ -62,8 +62,11 @@ def format_input(image,label):
 	#add some randomness
 	flip = tf.image.random_flip_left_right(image)
 	bright_change = tf.image.random_brightness(flip,max_delta=63)
+	contrast = tf.image.random_contrast(bright_change,lower=0.2,upper=1.8)
+	hue = tf.image.random_hue(contrast,0.2)
 	#inception expect inputs [-1.0,1.0]
-	scaled = tf.multiply(bright_change,2.0/255.0)
+	#bright_change = image
+	scaled = tf.multiply(hue,2.0/255.0)
 
 	scaled = tf.subtract(scaled,1.0)
 	#make batch functions happy (static shape)
@@ -160,6 +163,7 @@ with tf.name_scope('eval'):
 	correct = tf.nn.in_top_k(logits_full,label_batch,1)
 	accuracy = tf.reduce_mean(tf.cast(correct,tf.float32))
 
+a = [v for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,scope='flower_logits')]
 class _LoggerHook(tf.train.SessionRunHook):
 
 	def begin(self):
@@ -167,16 +171,19 @@ class _LoggerHook(tf.train.SessionRunHook):
 		self._start_time = time.time()
 	def before_run(self,run_context):
 		self._step+=1
+		#print(run_context.original_args.fetches)
 		return tf.train.SessionRunArgs([loss,accuracy])
 
 	def after_run(self,run_context,run_values):
-		if self._step % LOG_FREQUENCY == 0:
+		#print(run_values.results[2])
+		if self._step % LOG_FREQUENCY ==0:
 			current_time = time.time()
 			duration = current_time - self._start_time
 			self._start_time = current_time
 
 			loss_value = run_values.results[0]
 			acc = run_values.results[1]
+			
 			examples_per_sec = LOG_FREQUENCY/duration
 			sec_per_batch = duration / LOG_FREQUENCY
 
@@ -184,17 +191,61 @@ class _LoggerHook(tf.train.SessionRunHook):
 
 			print(format_str %(datetime.now(),self._step,loss_value,acc,
 				examples_per_sec,sec_per_batch))
-
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
-file_writer = tf.summary.FileWriter(LOGDIR,tf.get_default_graph())
-with tf.train.MonitoredTrainingSession(
-		checkpoint_dir=LOGDIR,
-		hooks=[tf.train.StopAtStepHook(last_step=NUM_EPOCHS*NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN),
-				tf.train.NanTensorHook(loss),
-				_LoggerHook()],
-		config=config) as mon_sess:
-	original_saver.restore(mon_sess,INCEPTION_V3_CHECKPOINT)
-	print("Proceeding to training stage")
-	while not mon_sess.should_stop():
-		mon_sess.run(train_op,feed_dict={training:True})
+if MODE == 'train':
+
+	file_writer = tf.summary.FileWriter(LOGDIR,tf.get_default_graph())
+	with tf.train.MonitoredTrainingSession(
+			save_checkpoint_secs=70,
+			checkpoint_dir=LOGDIR,
+			hooks=[tf.train.StopAtStepHook(last_step=NUM_EPOCHS*NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN),
+					tf.train.NanTensorHook(loss),
+					_LoggerHook()],
+			config=config) as mon_sess:
+		original_saver.restore(mon_sess,INCEPTION_V3_CHECKPOINT)
+		global_step = tf.contrib.framework.get_or_create_global_step()
+		print("Proceeding to training stage")
+		i = 0
+		while not mon_sess.should_stop():
+			#print(mon_sess.run(global_step))
+			#print([mon_sess.run(v) for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,scope='flower_logits')])
+			#mon_sess.run(accuracy,feed_dict={training:False})
+			#print(mon_sess.run(a[0])[0][0])
+			#print("before %f" %mon_sess.run(accuracy,feed_dict={training:False}))
+			mon_sess.run(train_op,feed_dict={training:True})
+			print('acc: %f' %mon_sess.run(accuracy,feed_dict={training:False}))
+			print('loss: %f' %mon_sess.run(loss,feed_dict={training:False}))
+			#print('passed')
+
+
+elif MODE == 'test':
+	init = tf.global_variables_initializer()
+	ckpt = tf.train.get_checkpoint_state(LOGDIR)
+	if ckpt and ckpt.model_checkpoint_path:
+		with tf.Session(config=config) as sess:
+				init.run()
+				saver = tf.train.Saver()
+				print(ckpt.model_checkpoint_path)
+				saver.restore(sess,ckpt.model_checkpoint_path)
+				global_step = tf.contrib.framework.get_or_create_global_step()
+				#print(global_step.eval())
+				print([(v.name,v.eval())  for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,scope="flower_logits")])
+				coord = tf.train.Coordinator()
+				threads =[]
+				try:
+					for qr in tf.get_collection(tf.GraphKeys.QUEUE_RUNNERS):
+						threads.extend(qr.create_threads(sess, coord=coord, daemon=True,start=True))
+					print('model restored')
+					i =0
+					num_iter = 4*NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN/BATCH_SIZE
+					print(num_iter)
+					while not coord.should_stop() and i < num_iter:
+						print("loss: %.2f," %loss.eval(feed_dict={training:False}),end="")
+						print("acc: %.2f" %accuracy.eval(feed_dict={training:False}))
+						i+=1
+				except Exception as e:
+					print(e)
+					coord.request_stop(e)
+				coord.request_stop()
+				coord.join(threads,stop_grace_period_secs=10)

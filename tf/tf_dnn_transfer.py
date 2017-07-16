@@ -41,7 +41,7 @@ with tf.Session() as sess:
     saver = tf.train.import_meta_graph('./mymode.ckpt.meta')
     saver.restore(sess,"./mymode.ckpt")
 
-    graph = tf.get_default_graph()
+    graph = tf.get_default_graph("flower_output/squeeze:0")
     #obtain the last hidden layer
 
     hidden_5 = graph.get_tensor_by_name("dnn/Elu_4:0")
