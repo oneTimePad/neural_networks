@@ -21,7 +21,7 @@ n_outputs = n_inputs
 batch_size = 150
 
 lr = 0.001
-
+"""
 with slim.arg_scope(
         [fc],
         activation_fn = tf.nn.elu,
@@ -44,8 +44,8 @@ with slim.arg_scope(
         h4 = fc(h3,n_hidden4)
         h5 = fc(h4,n_hidden5)
         out = fc(h5,n_outputs,activation_fn=None,scope="out")
-
 """
+
 from functools import partial
 initializer = tf.contrib.layers.variance_scaling_initializer()
 my_dense_layer = partial(
@@ -64,7 +64,7 @@ h3 = h3_mean + tf.exp(0.5 * h3_gamma) * noise
 hidden4 = my_dense_layer(h3, n_hidden4)
 hidden5 = my_dense_layer(hidden4, n_hidden5)
 out = my_dense_layer(hidden5, n_outputs, activation=None)
-"""
+
 with tf.name_scope("loss"):
     """
     loss = tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(labels=X,logits=out))
@@ -88,7 +88,7 @@ mnist = input_data.read_data_sets("/home/lie/Downloads/MNIST")
 
 init = tf.global_variables_initializer()
 
-n_digits= 10
+n_digits= 60
 with tf.Session() as sess:
     file_writer = tf.summary.FileWriter('tf_logs/auto_encoder',tf.get_default_graph())
     init.run()
