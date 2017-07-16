@@ -30,7 +30,7 @@ def fc_layer(x,n_hidden,scope,bias=None,act=tf.nn.relu,reuse=False,transpose=Fal
     with tf.name_scope(layer_name):
         with tf.variable_scope(scope,reuse=reuse):
                 x_size = int(x.get_shape()[1])
-
+                #usually sigmoid now so probably initialized wrong
                 w = tf.get_variable('weights',initializer=he([x_size,n_hidden]))
                 w = tf.transpose(w) if transpose else w
 

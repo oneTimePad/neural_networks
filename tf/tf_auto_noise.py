@@ -2,6 +2,12 @@ import tensorflow as tf
 from functools import partial
 import random
 import numpy as np
+
+"""
+denoising stacked autoencoder with tied weights based off of 
+https://github.com/ageron/handson-ml/blob/master/15_autoencoders.ipynb
+"""
+
 n_inputs = 28 * 28
 n_hidden1 = 300
 n_hidden2 = 150
