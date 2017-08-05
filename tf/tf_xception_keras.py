@@ -1,5 +1,21 @@
+
 import tensorflow as tf
-from tensorflow.contrib.slim.nets import inception
+
+
+
+
+xception = tf.contrib.keras.applications.Xception(
+											include_top=False,
+											weights='imagenet',
+											pooling='avg')
+
+
+
+logits = tf.contrib.keras.layers.Dense(5,input_shape(2048,))(xception)
+print(logits)
+import sys;sys.exit(1)
+
+import tensorflow as tf
 import tensorflow.contrib.slim as slim
 import time
 from datetime import datetime
@@ -24,12 +40,9 @@ NUM_OUT = 5
 INITIAL_LEARNING_RATE = 0.01
 DECAY_RATE = 0.96
 LOG_FREQUENCY = 10
-LOGDIR = '/tmp/inception_new14'
-FLOWERS_DIR = 'C:/Users/MTechLap/Desktop/models/tutorials/image/cifar10/flowers_test.bin'
-INCEPTION_V3_CHECKPOINT = 'C:/Users/MTechLap/Desktop/models/tutorials/image/cifar10/datasets/inception/inception_v3.ckpt'
-
-#is_training = tf.placeholder(tf.bool,shape=(),name="is_training")
-is_training = tf.placeholder_with_default(False,shape=(),name="is_training")
+LOGDIR = '/tmp/xception_new'
+FLOWERS_DIR = 'C:/Users/MTechLap/Desktop/models/tutorials/image/cifar10/flowers_train.bin'
+#INCEPTION_V3_CHECKPOINT = 'C:/Users/MTechLap/Desktop/models/tutorials/image/cifar10/datasets/inception/inception_v3.ckpt'
 def parse_data(filenames):
 	"""
 	args:
@@ -102,20 +115,21 @@ with tf.device('/cpu:0'):
 	image_batch,label_batch = gen_batch(scaled,label)
 
 training = tf.placeholder_with_default(False, shape=[])
+"""
 with slim.arg_scope(inception.inception_v3_arg_scope()):
 	old_logits,end_points = inception.inception_v3(
-					image_batch,num_classes=1001,is_training=is_training)
+					image_batch,num_classes=1001,is_training=False)
 
 	#saver = tf.train.Saver()
 	#reuse_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
 	#reuse_vars_dict = {var.name: var for var in reuse_vars}
 	#original_saver = tf.train.Saver(reuse_vars_dict)
 	original_saver = tf.train.Saver()
+"""
 with tf.name_scope('flower_output'):
 	pre_logits = end_points['PreLogits']
 	print(pre_logits.op.name)
-	#logits = tf.layers.conv2d(pre_logits,kernel_initializer=tf.contrib.layers.variance_scaling_initializer(),
-	#	kernel_size=1,strides=1,filters=5,padding='SAME',name='flower_logits')
+	#logits = tf.layers.conv2d(pre_logits,kernel_size=1,strides=1,filters=5,padding='SAME',name='flower_logits')
 	#prediction = tf.nn.softmax(logits,name='flower_softmax')
 	#logits_full = tf.reshape(logits,shape=[-1,NUM_OUT])
 	#logits_full = tf.squeeze(logits)
@@ -147,14 +161,12 @@ with tf.name_scope('flower_train'):
 		staircase=True
 	)
 	tf.summary.scalar('learning_rate',lr)
-	update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-	from functools import reduce
-	import operator
-	#with tf.control_dependencies(reduce(operator.concat,[[loss_avg_op],update_ops])):
-	#train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,scope='flower_logits')
-	print(train_vars)
-	sgd_op = tf.train.GradientDescentOptimizer(lr)
-	grads = sgd_op.compute_gradients(loss,var_list=train_vars)
+
+	with tf.control_dependencies([loss_avg_op]):
+		train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,scope='flower_logits')
+		print(train_vars)
+		sgd_op = tf.train.GradientDescentOptimizer(lr)
+		grads = sgd_op.compute_gradients(loss,var_list=train_vars)
 	apply_grads_op = sgd_op.apply_gradients(grads,global_step=global_step)
 	#track values of gradients and variables
 	for grad,var in grads:
@@ -214,10 +226,8 @@ if MODE == 'train':
 					tf.train.NanTensorHook(loss),
 					_LoggerHook()],
 			config=config) as mon_sess:
-		
-		original_saver.restore(mon_sess,INCEPTION_V3_CHECKPOINT)#,feed_dict={is_training:True})
+		original_saver.restore(mon_sess,INCEPTION_V3_CHECKPOINT)
 		global_step = tf.contrib.framework.get_or_create_global_step()
-		
 		print("Proceeding to training stage")
 		i = 0
 		while not mon_sess.should_stop():
@@ -227,8 +237,8 @@ if MODE == 'train':
 			#print(mon_sess.run(a[0])[0][0])
 			#print("before %f" %mon_sess.run(accuracy,feed_dict={training:False}))
 			#mon(train_opn_sess.ru,feed_dict={training:True})
-			mon_sess.run(train_op,feed_dict={is_training:True})
-			#print('acc: %f' %mon_sess.run(accuracy,feed_dict={is_training:False}))
+			mon_sess.run(train_op,feed_dict={training:True})
+			print('acc: %f' %mon_sess.run(accuracy,feed_dict={training:False}))
 			#print('loss: %f' %mon_sess.run(loss,feed_dict={training:False}))
 			#print('passed')
 
@@ -255,8 +265,8 @@ elif MODE == 'test':
 					num_iter = 4*NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN/BATCH_SIZE
 					print(num_iter)
 					while not coord.should_stop() and i < num_iter:
-						print("loss: %.2f," %loss.eval(feed_dict={training:False}),end="")
-						print("acc: %.2f" %accuracy.eval(feed_dict={training:False}))
+						print("loss: %.2f," %loss.eval(feed_dict={training:True}),end="")
+						print("acc: %.2f" %accuracy.eval(feed_dict={training:True}))
 						i+=1
 				except Exception as e:
 					print(e)
