@@ -147,12 +147,11 @@ with tf.name_scope('flower_train'):
 		staircase=True
 	)
 	tf.summary.scalar('learning_rate',lr)
-	
+
 	update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
 	from functools import reduce
 	import operator
 	train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,scope='flower_logits')
-	print(train_vars)
 	sgd_op = tf.train.GradientDescentOptimizer(lr)
 	with tf.control_dependencies(reduce(operator.concat,[[loss_avg_op],update_ops]))
 		grads = sgd_op.compute_gradients(loss,var_list=train_vars)
