@@ -18,13 +18,13 @@ state = tf.placeholder(shape=(None,4),dtype=tf.float32,name='state')
 with tf.variable_scope('critic'):
     h1 = slim.fully_connected(state,4,activation_fn=tf.nn.relu,weights_initializer=tf.contrib.layers.variance_scaling_initializer())
     #h2 = slim.fully_connected(h1,30,activation_fn=tf.nn.relu,weights_initializer=tf.contrib.layers.variance_scaling_initializer())
-    V = slim.fully_connected(h1,1,activation_fn=None)
+    V = slim.fully_connected(h1,1,activation_fn=None,weights_initializer=tf.contrib.layers.variance_scaling_initializer())
 
 #policy
 with tf.variable_scope('actor'):
     h1 = slim.fully_connected(state,4,activation_fn=tf.nn.relu,weights_initializer=tf.contrib.layers.variance_scaling_initializer())
     #h2 = slim.fully_connected(h1,30,activation_fn=tf.nn.sigmoid,weights_initializer=tf.contrib.layers.variance_scaling_initializer())
-    logits = slim.fully_connected(h1,1,activation_fn=None)
+    logits = slim.fully_connected(h1,1,activation_fn=None,weights_initializer=tf.contrib.layers.variance_scaling_initializer())
     action_fn = tf.nn.sigmoid(logits)
 
 #network params
