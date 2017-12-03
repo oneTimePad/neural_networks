@@ -68,6 +68,7 @@ with tf.Session() as sess:
         while done!=True:
             prev_state = state
             state, reward,done,info = env.step(action)
+            import pdb;pdb.set_trace()
             env.render()
             prev_action = action
             action = get_action_n(sess,state)
