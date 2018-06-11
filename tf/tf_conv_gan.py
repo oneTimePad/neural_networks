@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
 """
-DCGAN for Cifar10 inspired by https://github.com/carpedm20/DCGAN-tensorflow and https://github.com/fzliu/tf-dcgan 
+DCGAN for Cifar10 inspired by https://github.com/carpedm20/DCGAN-tensorflow and https://github.com/fzliu/tf-dcgan
 and the TF Cifar10 tutorial
 
 """
@@ -22,9 +22,9 @@ WIDTH = 32
 DEPTH = 3
 BATCH_SIZE = 64
 NUM_EPOCHS = 50
-LOGDIR = '/tmp/gan60'
-CIFAR_DATA = '/tmp/cifar10_data/cifar-10-batches-bin'
-SAMPLES_DIR = '/tmp/gan_samples/'
+LOGDIR = '/tmp/gan61'
+CIFAR_DATA = '/home/lie/cifar-10-batches-bin'
+SAMPLES_DIR = '/home/lie/gan_samples/'
 SAMPLE_STEP = 100
 SAMPLES = 16
 NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 50000
@@ -67,7 +67,7 @@ def parse_data(filenames):
 def format_input(image,label):
 	image = tf.cast(image,tf.float32)
 	image= tf.image.resize_images(image, [2*HEIGHT, 2*WIDTH], method=tf.image.ResizeMethod.BILINEAR)
-	scaled = image/127.5 - 1.
+	scaled = 2*image/255.0 - 1.
 	scaled.set_shape([2*HEIGHT,2*WIDTH,DEPTH])
 	label.set_shape([1])
 	#print(tf.reduce_max(image_norm))
@@ -92,14 +92,14 @@ def gen_batch(image,label):
 
 #preprocessing and training
 with tf.device('/cpu:0'):
-	filenames = [CIFAR_DATA +('/data_batch_%d.bin' % i) 
+	filenames = [CIFAR_DATA +('/data_batch_%d.bin' % i)
                  for i in range(1, 6)]
 	print('starting to load data. please wait...')
 	key,image,label  = parse_data(filenames)
 	scaled,label = format_input(image,label)
 	image_batch,_ = gen_batch(scaled,label)
 
-#not used 
+#not used
 def lrelu(x, leak=0.2, name="lrelu"):
      with tf.variable_scope(name):
          f1 = 0.5 * (1 + leak)
@@ -120,21 +120,48 @@ batch_norm_params = {
   }
 
 
-Z = tf.placeholder(tf.float32,shape=(None,1,1,code_size),name="Z")
+permute = tf.random_normal(
+    (2*HEIGHT,2*WIDTH, 3),
+    mean=0.0,
+    stddev=1.0,
+    dtype=tf.float32
+)
 
-gen_arch =[
-			(512,(4,4),1,"VALID","NHWC",tf.nn.relu,slim.batch_norm,batch_norm_params),
-			(256,(5,5),2,"SAME","NHWC",tf.nn.relu,slim.batch_norm,batch_norm_params),
-			(128,(5,5),2,"SAME","NHWC",tf.nn.relu,slim.batch_norm,batch_norm_params),
-			(64,(5,5),2,"SAME","NHWC",tf.nn.relu,slim.batch_norm,batch_norm_params),
-			(3,(3,3),2,"SAME","NHWC",tf.nn.tanh),
-		]
+noisy  = tf.map_fn(lambda x: x + permute, image_batch, dtype=tf.float32)
+tf.summary.image('noisy',noisy)
+#gen_arch =[
+#			(512,(4,4),1,"VALID","NHWC",tf.nn.relu,slim.batch_norm,batch_norm_params),
+#			(256,(5,5),2,"SAME","NHWC",tf.nn.relu,slim.batch_norm,batch_norm_params),
+#			(128,(5,5),2,"SAME","NHWC",tf.nn.relu,slim.batch_norm,batch_norm_params),
+#			(64,(5,5),2,"SAME","NHWC",tf.nn.relu,slim.batch_norm,batch_norm_params),
+#			(3,(3,3),2,"SAME","NHWC",tf.nn.tanh),
+#		]
 
-gen =slim.stack(Z,slim.conv2d_transpose,gen_arch,
+#gen =slim.stack(Z,slim.conv2d_transpose,gen_arch,
+#	weights_initializer=tf.truncated_normal_initializer(stddev=0.02),
+#	scope="generative")
+
+encoder_arch = [
+			(32, (3, 3), 2, "SAME","NHWC", 1,tf.nn.relu,slim.batch_norm,batch_norm_params),
+			(64,(3,3),  2, "SAME", "NHWC",1,tf.nn.relu,slim.batch_norm,batch_norm_params),
+			(128,(3,3),  2, "SAME", "NHWC",1,tf.nn.relu,slim.batch_norm,batch_norm_params)
+
+]
+encoder =slim.stack(noisy,slim.conv2d,encoder_arch,
 	weights_initializer=tf.truncated_normal_initializer(stddev=0.02),
-	scope="generative")
-sampler = (1.+gen)/2
+	scope="encoder")
+decoder_arch = [
+			(64, (3, 3), 2, "SAME", "NHWC",tf.nn.tanh,None,None),
+			(32,(3,3),  2, "SAME", "NHWC",tf.nn.tanh,None,None),
+			(3,(3,3),  2, "SAME","NHWC", tf.nn.tanh, None, None)
 
+]
+decoder =slim.stack(encoder,slim.conv2d_transpose,decoder_arch,
+	weights_initializer=tf.truncated_normal_initializer(stddev=0.02),
+	scope="decoder")
+
+sampler = (1. + decoder) /2.
+tf.summary.image("samples", sampler)
 dis_arch = [
 			(128,(5,5),2,"SAME","NHWC",1,tf.nn.relu),
 			(256,(5,5),2,"SAME","NHWC",1,tf.nn.relu,slim.batch_norm,batch_norm_params),
@@ -149,13 +176,13 @@ disX = slim.stack(image_batch,slim.conv2d,dis_arch,
 	weights_initializer=tf.truncated_normal_initializer(stddev=0.02),
 	scope="discriminative")
 
-disG = slim.stack(gen,slim.conv2d,dis_arch,
+disG = slim.stack(decoder,slim.conv2d,dis_arch,
 	weights_initializer=tf.truncated_normal_initializer(stddev=0.02),
 	scope="discriminative",
 	reuse=True)
 
 
-gscopes=['generative']
+gscopes=['encoder', 'decoder']
 dscopes=['discriminative']
 
 
@@ -193,6 +220,8 @@ def plot(samples):
 	gs.update(wspace=0.05,hspace=0.05)
 
 	for i,sample in enumerate(samples):
+		if i == 16:
+			break
 		ax = plt.subplot(gs[i])
 		plt.axis('off')
 		ax.set_xticklabels([])
@@ -218,19 +247,17 @@ with tf.train.MonitoredTrainingSession(
 		tf.train.StopAtStepHook(last_step=NUM_EPOCHS*NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN),
 		tf.train.NanTensorHook(dloss),
 		tf.train.NanTensorHook(gloss)],
-	config=config) as mon_sess:		
+	config=config) as mon_sess:
 	print("Proceeding to training stage")
 	step = 0
 	while not mon_sess.should_stop():
 		if step %SAMPLE_STEP == 1:
-			plotfig(mon_sess.run(sampler,feed_dict={Z:np.random.uniform(-1.,1.,size=(SAMPLES,1,1,code_size)).astype(np.float32),is_training:False}),step)
+			plotfig(mon_sess.run(sampler,feed_dict={is_training:False}),step)
 		step+=1
-		batch_z = np.random.uniform(-1.,1.,size=(BATCH_SIZE,1,1,code_size)).astype(np.float32)
-		mon_sess.run(dtrain_op,feed_dict={Z:batch_z,is_training:True})
-		mon_sess.run(gtrain_op,feed_dict={Z:batch_z,is_training:True})
-		mon_sess.run(gtrain_op,feed_dict={Z:batch_z,is_training:True})
-		if step %LOG_FREQUENCY==0:
-			dloss_val,gloss_val = mon_sess.run([dloss,gloss],feed_dict={is_training:False,Z:batch_z})
-			print("Gloss: %f, Dloss %f" %(dloss_val, gloss_val))
-			
 
+		mon_sess.run(dtrain_op,feed_dict={is_training:True})
+		mon_sess.run(gtrain_op,feed_dict={is_training:True})
+		mon_sess.run(gtrain_op,feed_dict={is_training:True})
+		if step %LOG_FREQUENCY==0:
+			dloss_val,gloss_val = mon_sess.run([dloss,gloss],feed_dict={is_training:False})
+			print("Gloss: %f, Dloss %f" %(dloss_val, gloss_val))

@@ -24,6 +24,7 @@ act= tf.nn.elu
 noise_level = 1.0
 X = tf.placeholder(tf.float32, shape=(None,n_inputs),name="X")
 X_noisy = X + noise_level * tf.random_normal(tf.shape(X))
+tf.summary.image("LOL", X_noisy)
 def fc_layer(x,n_hidden,scope,bias=None,activation=True,reuse=False,transpose=False,layer_name='hidden'):
     with tf.name_scope(layer_name):
         with tf.variable_scope(scope,reuse=reuse):
@@ -105,6 +106,7 @@ with tf.Session() as sess:
     import matplotlib.pyplot as plt
     n_test_digits = 2
     X_test = mnist.test.images[:n_test_digits]
+    noise = X_noisy.eval(feed_dict={X:X_test})
     outputs_val = out.eval(feed_dict={X: X_test})
     fig = plt.figure(figsize=(8, 3 * n_test_digits))
     #savefig('lol.png')
@@ -114,6 +116,7 @@ with tf.Session() as sess:
         plt.show()
     for digit_index in range(n_test_digits):
         plt.subplot(n_test_digits, 2, digit_index * 2 + 1)
-        #plot_image(X_test[digit_index])
+        plot_image(noise[digit_index])
         plt.subplot(n_test_digits, 2, digit_index * 2 + 2)
         plot_image(outputs_val[digit_index])
+

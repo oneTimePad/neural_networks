@@ -1,0 +1,20 @@
+mkdir /tmp/nmt_model
+python -m nmt.nmt \
+    --src=en --tgt=vi \
+    --vocab_prefix=/home/lie/nmt/nmt/iwslt15/vocab  \
+    --train_prefix=/home/lie/nmt/nmt/iwslt15/train \
+    --dev_prefix=/home/lie/nmt/nmt/iwslt15/tst2012  \
+    --test_prefix=/home/lie/nmt/nmt/iwslt15/tst2013 \
+    --out_dir=/tmp/nmt_model \
+    --num_train_steps=12000 \
+    --steps_per_stats=100 \
+    --num_layers=2 \
+    --num_units=128 \
+    --dropout=0.2 \
+    --metrics=bleu
+
+python -m nmt.nmt \
+    --out_dir=/tmp/nmt_model \
+    --inference_input_file=/home/lie/nmt/nmt/scripts/iwslt15/infer.en
+    --inference_output_file=/tmp/nmt_model/output_infer
+
